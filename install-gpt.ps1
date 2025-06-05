@@ -1,6 +1,11 @@
 # Задаём API-ключ ChatGPT, взяты отсюда:
 # https://platform.openai.com/api-keys
-$Env:OPENAI_API_KEY = "kojsk-proj-b3_Nzvdyka7C4GXPSVRXVSGwzi45KNEpwggk2gC3apO3qQSa3G4OuxKPwOYF6JRphEw14AtJyrT3BlbkFJ6ir9KwG3LcgF6Ls9KFtNwuekMUAad5RIx07CL02ynavR--eTlGrpKul6Erpcd_zXAO9isFpQwAOjef"
+$Env:OPENAI_API_KEY = "kojsk-proj-CexBe-WvDUOCs1y13TEc82fNjMJsGgfyygxq0zxAxKnQTPcAjMLWi8WUlkTxjjB2hvssnMOCoLT3BlbkFJAdF7X7Rg2BedPKBdN44CHUQPYVoe45eJhfonsa4lz2HslgbW-YCmz7R_i-uXWMSLR873OjefJiz9gA"
+
+# На компьютере должна быть установлена программа WireGuard
+# Необходмсо указать путь и название туннеля WireGuard
+$Env:TUNNEL_NAME = "wg0"
+$Env:WIREGUARD_TUNNEL_PATH = "C:\wg0.conf"
 
 <#
 .SYNOPSIS
@@ -96,8 +101,10 @@ $headers = @{
 $apiUrl = "https://api.openai.com/v1/chat/completions"
 
 try {
-    # Отправляем POST-запрос к OpenAI
+    # Включаем VPN, отправляем POST-запрос к OpenAI и отключаем VPN
+    wireguard.exe /installtunnelservice "$WIREGUARD_TUNNEL_PATH"
     $response = Invoke-RestMethod -Uri $apiUrl -Method Post -Headers $headers -Body $bodyJson
+    wireguard.exe /uninstalltunnelservice "$TUNNEL_NAME"
 } catch {
     Write-Error "Ошибка при запросе к OpenAI API: $_"
     exit 1
