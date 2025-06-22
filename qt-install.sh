@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # ==================== ROOT PATH ==========================
 ROOT_DIR="/data/qt"
@@ -25,14 +25,27 @@ QT_COMPAT_SRC="$SRC_DIR/qt5compat"
 QT_BASE_BUILD="$BUILD_DIR/qt-base"
 QT_COMPAT_BUILD="$BUILD_DIR/qt-compat"
 
+# Flags
 FORCE=false
-set -e
+SKIP_QT5COMPAT=false
+set -euo pipefail
 
-# ======================== FLAGS ==========================
-if [[ "$1" == "--force" ]]; then
-  FORCE=true
-  echo "⚠️  Force rebuild enabled: old source, build and install dirs will be reset"
-fi
+# ======================== PARSING ========================
+for arg in "$@"; do
+  case "$arg" in
+    --force)
+      FORCE=true
+      echo "⚠️  Force rebuild enabled"
+      ;;
+    --skip-qt5compat)
+      SKIP_QT5COMPAT=true
+      echo "⚠️  Skipping Qt5Compat module"
+      ;;
+    *)
+      # ignore other args
+      ;;
+  esac
+done
 
 # ======================= HELPERS =========================
 check_success() {
@@ -57,7 +70,7 @@ clone_module() {
     git clone --depth 1 --branch "$QT_TAG" "$repo_url" "$dest_dir"
     check_success "Failed to clone $module_name"
   else
-    echo "✅  $module_name source already exists, fetching latest $QT_TAG..."
+    echo "✅  $module_name source already exists"
     cd "$dest_dir"
     git fetch --depth 1 origin "$QT_TAG"
     git checkout "$QT_TAG"
@@ -77,20 +90,17 @@ build_module() {
   fi
 
   if [ ! -d "$build_dir" ]; then
-    echo "🔧 Preparing build directory for $module_name..."
     mkdir -p "$build_dir"
     check_success "Could not create $build_dir"
-  else
-    echo "✅ Build directory $build_dir exists."
   fi
 
   echo "⚙️  Configuring $module_name..."
   rm -f "$build_dir/CMakeCache.txt"
 
-  # Point CMake at our just-built Qt only
+  # Ensure environment variables won't cause unbound errors
   export PATH="$INSTALL_PREFIX/bin:$PATH"
-  export LD_LIBRARY_PATH="$INSTALL_PREFIX/lib:$LD_LIBRARY_PATH"
-  export CMAKE_PREFIX_PATH="$INSTALL_PREFIX/lib/cmake:$CMAKE_PREFIX_PATH"
+  export LD_LIBRARY_PATH="$INSTALL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+  export CMAKE_PREFIX_PATH="$INSTALL_PREFIX/lib/cmake${CMAKE_PREFIX_PATH:+:}${CMAKE_PREFIX_PATH:-}"
 
   cmake -S "$src_dir" -B "$build_dir" \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
@@ -99,9 +109,6 @@ build_module() {
     -DQT_NO_PACKAGE_VERSION_CHECK=TRUE \
     -DQT_NO_PACKAGE_VERSION_INCOMPATIBLE_WARNING=TRUE
   check_success "CMake configuration for $module_name failed"
-
-  echo "🛠️  Cleaning previous $module_name build..."
-  make -C "$build_dir" clean || true
 
   echo "🏗️  Building $module_name..."
   make -C "$build_dir" -j"$(nproc)"
@@ -119,45 +126,50 @@ install_module() {
 
   if [ ! -f "$config_file" ]; then
     echo "❌ Error: Qt6Config.cmake not found after installing $module_name"
-    echo "       Expected at: $config_file"
     exit 1
   fi
 }
 
 # ====================== MAIN FLOW ========================
+
 echo "📁 Preparing directories..."
 mkdir -p "$SRC_DIR" "$BUILD_DIR" "$INSTALL_PREFIX"
 
-# ---- Step 1: Clone Qt modules from Git ----
-clone_module "$QTBASE_REPO"    "$QT_BASE_SRC"   "Qt Base"
-clone_module "$QT5COMPAT_REPO" "$QT_COMPAT_SRC" "Qt 5Compat"
+# Clone Qt Base always
+clone_module "$QTBASE_REPO" "$QT_BASE_SRC" "Qt Base"
 
-# ---- Step 2: Build ----
-echo "🌐 Exporting environment to prefer local Qt over system Qt"
-export PATH="$INSTALL_PREFIX/bin:$PATH"
-export LD_LIBRARY_PATH="$INSTALL_PREFIX/lib:$LD_LIBRARY_PATH"
-export CMAKE_PREFIX_PATH="$INSTALL_PREFIX/lib/cmake:$CMAKE_PREFIX_PATH"
-
-build_module "$QT_BASE_SRC"   "$QT_BASE_BUILD"   "Qt Base"
-build_module "$QT_COMPAT_SRC" "$QT_COMPAT_BUILD" "Qt 5Compat"
-
-# ---- Step 3: Install ----
-install_module "$QT_BASE_BUILD"   "Qt Base"
-install_module "$QT_COMPAT_BUILD" "Qt 5Compat"
-
-# ---- Step 4: Validate qmake ----
-QMAKE_PATH="$INSTALL_PREFIX/bin/qmake"
-if [ ! -f "$QMAKE_PATH" ]; then
-  echo "❌ qmake not found at $QMAKE_PATH. Installation might be incomplete."
-  exit 1
-else
-  echo "✅ qmake found at $QMAKE_PATH"
+# Clone Qt5Compat only if not skipped
+if [ "$SKIP_QT5COMPAT" = false ]; then
+  clone_module "$QT5COMPAT_REPO" "$QT_COMPAT_SRC" "Qt 5Compat"
 fi
 
-# ---- Step 5: Persist environment ----
-echo "🌐 Updating ~/.bashrc for future sessions..."
-grep -q "$INSTALL_PREFIX/bin" ~/.bashrc || echo "export PATH=\"$INSTALL_PREFIX/bin:\$PATH\"" >> ~/.bashrc
-grep -q "$INSTALL_PREFIX/lib" ~/.bashrc || echo "export LD_LIBRARY_PATH=\"$INSTALL_PREFIX/lib:\$LD_LIBRARY_PATH\"" >> ~/.bashrc
-grep -q "$INSTALL_PREFIX/lib/cmake" ~/.bashrc || echo "export CMAKE_PREFIX_PATH=\"$INSTALL_PREFIX/lib/cmake:\$CMAKE_PREFIX_PATH\"" >> ~/.bashrc
+# Set environment for local Qt (guard unbound)
+echo "🌐 Setting environment for local Qt"
+export PATH="$INSTALL_PREFIX/bin:$PATH"
+export LD_LIBRARY_PATH="$INSTALL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+export CMAKE_PREFIX_PATH="$INSTALL_PREFIX/lib/cmake${CMAKE_PREFIX_PATH:+:}${CMAKE_PREFIX_PATH:-}"
 
-echo "🎉 Qt $QT_VERSION from Git has been built and installed successfully."
+# Build Qt Base
+build_module "$QT_BASE_SRC" "$QT_BASE_BUILD" "Qt Base"
+
+# Build Qt5Compat if not skipped
+if [ "$SKIP_QT5COMPAT" = false ]; then
+  build_module "$QT_COMPAT_SRC" "$QT_COMPAT_BUILD" "Qt 5Compat"
+fi
+
+# Install Qt Base
+install_module "$QT_BASE_BUILD" "Qt Base"
+
+# Install Qt5Compat if not skipped
+if [ "$SKIP_QT5COMPAT" = false ]; then
+  install_module "$QT_COMPAT_BUILD" "Qt 5Compat"
+fi
+
+# Validate qmake
+QMAKE_PATH="$INSTALL_PREFIX/bin/qmake"
+if [ ! -f "$QMAKE_PATH" ]; then
+  echo "❌ qmake not found at $QMAKE_PATH"
+  exit 1
+fi
+
+echo "✅ Qt $QT_VERSION installed in $INSTALL_PREFIX"
