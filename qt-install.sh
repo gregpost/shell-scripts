@@ -38,7 +38,7 @@ fi
 # ======================= HELPERS =========================
 check_success() {
   if [ $? -ne 0 ]; then
-    echo "❌ Ошибка: $1"
+    echo "❌ Error: $1"
     exit 1
   fi
 }
@@ -86,9 +86,13 @@ build_module() {
   fi
 
   echo "⚙️ Configuring $module_name..."
+
+  # Force CMake to use only the freshly built Qt 6.8.0 and ignore system Qt
   cmake -S "$src_dir" -B "$build_dir" \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-    -DCMAKE_PREFIX_PATH="$INSTALL_PREFIX/lib/cmake"
+    -DCMAKE_PREFIX_PATH="$INSTALL_PREFIX/lib/cmake" \
+    -DQT_NO_PACKAGE_VERSION_CHECK=TRUE
+
   check_success "CMake configuration for $module_name failed"
 
   echo "🛠️ Cleaning previous build of $module_name..."
@@ -119,7 +123,6 @@ install_module() {
   fi
 }
 
-
 # ====================== MAIN FLOW ========================
 echo "📁 Preparing directories..."
 mkdir -p "$DOWNLOAD_DIR" "$SRC_DIR" "$BUILD_DIR"
@@ -134,6 +137,12 @@ extract_tar "$QT_BASE_TAR" "$QT_BASE_SRC"
 extract_tar "$QT_COMPAT_TAR" "$QT_COMPAT_SRC"
 
 # ---- Step 3: Build ----
+
+# Ensure environment uses our custom Qt install instead of system Qt
+export PATH="$INSTALL_PREFIX/bin:$PATH"
+export LD_LIBRARY_PATH="$INSTALL_PREFIX/lib:$LD_LIBRARY_PATH"
+export CMAKE_PREFIX_PATH="$INSTALL_PREFIX/lib/cmake:$CMAKE_PREFIX_PATH"
+
 build_module "$QT_BASE_SRC" "$QT_BASE_BUILD" "Qt Base"
 build_module "$QT_COMPAT_SRC" "$QT_COMPAT_BUILD" "Qt 5Compat"
 
@@ -162,4 +171,3 @@ export LD_LIBRARY_PATH="$INSTALL_PREFIX/lib:$LD_LIBRARY_PATH"
 export CMAKE_PREFIX_PATH="$INSTALL_PREFIX/lib/cmake:$CMAKE_PREFIX_PATH"
 
 echo "🎉 Qt $QT_VERSION installation completed successfully."
-
