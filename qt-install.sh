@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==================== ROOT PATH ==========================
-ROOT_DIR="/shared/qt"
+ROOT_DIR="/data/qt"
 
 # ==================== QT VERSION =========================
 MAJOR="6"
