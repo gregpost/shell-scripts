@@ -1,150 +1,128 @@
 #!/usr/bin/env bash
 
-#### Настройки по умолчанию (если нужно «захардкодить» пути, раскомментируйте и измените):
-FIXED_IMAGE="/data/studies-UPENN_GBM/nii/1/flair.nii.gz"
-MOVING_IMAGE="/data/studies/vessels-train-data/IXI340-IOP-0915-MRA_1_brain-only.nii.gz"
-OUTPUT_DIR="/data/gp/reg/upenn-gbm/1/t1
+##############################################################################
+###### !!!!!!!!!!!!!!!!!!!!!!!!!! FILL THIS PATHS !!!!!!!!!!!!!!!!!!!!! ######
+##############################################################################
 
-#
-# register_to_mni.sh
-#
-# Shell‐скрипт для аффинной регистрации T1‑МРТ (moving) в пространство MNI305 (fixed)
-# с помощью ANTs. Параметры можно задать прямо в скрипте (по умолчанию) либо 
-# передать через консоль (если не указаны внутри).
-#
-# Usage:
-#   1. Задать значения внутри скрипта в секции «# Настройки по умолчанию»
-#      или
-#   2. Передать три аргумента командной строки:
-#        ./register_to_mni.sh /path/to/MNI305.nii.gz /path/to/subject_T1.nii.gz /path/to/output_dir
-#
-# Приоритет:
-#   • Если переменная FIXED_IMAGE (или MOVING_IMAGE, OUTPUT_DIR) не задана в скрипте,
-#     то её значение берётся из соответствующего аргумента ($1, $2, $3).
-#   • Если и внутри скрипта, и в аргументе её нет → ошибка.
-#
-# Требования:
-#   • ANTs (v2.x или новее), чтобы были доступны утилиты
-#       – antsRegistrationSyN.sh
-#       – antsApplyTransforms
-#   • Conda (для установки ANTs через conda, если они не установлены)
-#     При отсутствии conda попытаемся запустить install-conda.sh из той же директории.
-#   • Права на запись в OUTPUT_DIR
-#   • fixed и moving должны быть в формате NIfTI (.nii или .nii.gz)
-#
-# Пример запуска:
-#   chmod +x register_to_mni.sh
-#   ./register_to_mni.sh /home/user/templates/MNI305.nii.gz /home/user/data/subject01_T1.nii.gz /home/user/results/subj01
-#
+# The path to the template image (MNI305 or other).  
+# The output volume size will be the same as in this template.  
+# The registaration script will try to fit theinput brain volume to this template brain, so the output barin will be similar to this template brain below. 
+FIXED_IMAGE="/data/reg/mni305_brainonly.nii.gz"
+
+# The output fodler path 
+OUTPUT_DIR="/data/gp/reg/upenn-gbm/nii/1/flair"
+
+# The path where conda insalled (or empty folder to install conda from scratch):
+CONDA_INSTALL_DIR="/data/gp/miniconda3"
+ 
+# The path to the input volume for registering
+MOVING_IMAGE="/data/studies/UPENN-GBM/nii/1/flair.nii.gz"
+##############################################################################
+
+
+# Additional paths (you can no change this)
+MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+INSTALLER_NAME="Miniconda3-latest-Linux-x86_64.sh"
+BASHRC="${HOME}/.bashrc"
 
 set -e
 
-#### Привязываем из аргументов только если внутри пусто
+export PATH="$CONDA_INSTALL_DIR/bin:$PATH"
+
+### --- Привязываем из аргументов --- ###
 : "${FIXED_IMAGE:=$1}"
 : "${MOVING_IMAGE:=$2}"
 : "${OUTPUT_DIR:=$3}"
 
-#### Проверяем, что всё «настроено» (стало непустым)
+### --- Вывод сообщений --- ###
+info() { echo -e "\e[1;32m[INFO]\e[0m $1"; }
+error() { echo -e "\e[1;31m[ERROR]\e[0m $1" >&2; exit 1; }
+
+### --- Проверка переменных --- ###
 if [ -z "$FIXED_IMAGE" ] || [ -z "$MOVING_IMAGE" ] || [ -z "$OUTPUT_DIR" ]; then
   echo "Usage: $0 <fixed_MNI305.nii.gz> <moving_subject_T1.nii.gz> <output_dir>"
-  echo "Или задайте нужные переменные внутри скрипта в секции 'Настройки по умолчанию'."
+  echo "Или задайте нужные переменные внутри скрипта."
   exit 1
 fi
+[ ! -f "$FIXED_IMAGE" ] && error "Fixed image not found: $FIXED_IMAGE"
+[ ! -f "$MOVING_IMAGE" ] && error "Moving image not found: $MOVING_IMAGE"
 
-# Проверяем существование входных файлов
-if [ ! -f "$FIXED_IMAGE" ]; then
-  echo "Error: fixed image not found at '$FIXED_IMAGE'"
-  exit 1
-fi
-if [ ! -f "$MOVING_IMAGE" ]; then
-  echo "Error: moving image not found at '$MOVING_IMAGE'"
-  exit 1
-fi
+### --- Установка conda при необходимости --- ###
+install_conda_if_needed() {
+  if command -v conda >/dev/null 2>&1; then
+    info "Conda уже установлена: $(command -v conda)"
+    return
+  fi
 
-# Функция для проверки conda или попытки установки через install-conda.sh
-ensure_conda() {
-  if ! command -v conda >/dev/null 2>&1; then
-    echo "Conda не найдена. Попытка запустить install-conda.sh..."
-    if [ -f "./install-conda.sh" ]; then
-      bash ./install-conda.sh
-      # После установки снова проверяем
-      if ! command -v conda >/dev/null 2>&1; then
-        echo "Error: после запуска install-conda.sh conda всё ещё не найдена."
-        exit 1
-      fi
-    else
-      echo "Error: файл install-conda.sh не найден в текущей директории."
-      exit 1
-    fi
+  info "Conda не найдена. Устанавливаю Miniconda..."
+  cd /tmp
+  [ -f "$INSTALLER_NAME" ] && rm -f "$INSTALLER_NAME"
+
+  if command -v wget >/dev/null 2>&1; then
+    wget --quiet "$MINICONDA_URL" -O "$INSTALLER_NAME"
+  elif command -v curl >/dev/null 2>&1; then
+    curl -sSL "$MINICONDA_URL" -o "$INSTALLER_NAME"
+  else
+    error "Не найден wget или curl. Установите один из них."
+  fi
+
+  chmod +x "$INSTALLER_NAME"
+  bash "$INSTALLER_NAME" -b -p "$CONDA_INSTALL_DIR"
+
+  if ! grep -q "# >>> conda initialize >>>" "$BASHRC"; then
+    info "Добавляю инициализацию conda в $BASHRC"
+    {
+      echo ""
+      echo "# >>> conda initialize >>>"
+      echo "__conda_setup=\"\$('$CONDA_INSTALL_DIR/bin/conda' 'shell.bash' 'hook' 2> /dev/null)\" || true"
+      echo "eval \"\$__conda_setup\""
+      echo "unset __conda_setup"
+      echo "# <<< conda initialize <<<"
+      echo ""
+    } >> "$BASHRC"
+  fi
+
+  # shellcheck disable=SC1090
+  source "$BASHRC"
+  rm -f "/tmp/$INSTALLER_NAME"
+
+  command -v conda >/dev/null 2>&1 || error "conda всё ещё не найдена после установки"
+  info "Conda установлена: $(conda --version)"
+}
+
+### --- Установка ANTs, если не установлены --- ###
+install_ants_if_needed() {
+  if ! command -v antsRegistrationSyN.sh >/dev/null 2>&1; then
+    info "Утилита antsRegistrationSyN.sh не найдена. Устанавливаю ANTs через conda..."
+    conda install -y -c conda-forge ants || error "Не удалось установить ANTs"
+  fi
+
+  if ! command -v antsApplyTransforms >/dev/null 2>&1; then
+    info "Утилита antsApplyTransforms не найдена. Устанавливаю ANTs через conda..."
+    conda install -y -c conda-forge ants || error "Не удалось установить ANTs"
   fi
 }
 
-# Перед проверкой ANTs убедимся, что conda установлен
-ensure_conda
-
-# Проверяем наличие утилиты antsRegistrationSyN.sh
-if ! command -v antsRegistrationSyN.sh >/dev/null 2>&1; then
-  echo "ANTs (antsRegistrationSyN.sh) не найдены в PATH. Попытка установки через conda..."
-  conda install -y -c conda-forge ants || {
-    echo "Error: не удалось установить ANTs через conda."
-    exit 1
-  }
-fi
-
-# Перед проверкой antsApplyTransforms убедимся, что conda установлен (хотя conda уже есть)
-ensure_conda
-
-# Проверяем наличие утилиты antsApplyTransforms
-if ! command -v antsApplyTransforms >/dev/null 2>&1; then
-  echo "ANTs (antsApplyTransforms) не найдена. Попытка установки через conda..."
-  conda install -y -c conda-forge ants || {
-    echo "Error: не удалось установить ANTs через conda."
-    exit 1
-  }
-fi
-
-# Создаём выходную директорию, если её нет
+### --- Подготовка --- ###
+install_conda_if_needed
+install_ants_if_needed
 mkdir -p "$OUTPUT_DIR"
-
-# Базовый префикс для имен выходных файлов
 PREFIX="${OUTPUT_DIR}/subject_to_MNI"
 
-# -------------------------------------------------------
-# 1. Аффинная регистрация: antsRegistrationSyN.sh (режим Affine)
-#
-# -d 3           : размерность (3D)
-# -f <fixed>     : fixed image (шаблон MNI305)
-# -m <moving>    : moving image (ваш T1)
-# -o <prefix>    : префикс для выходных файлов
-# -t a           : использовать только аффинную регистрацию (Affine)
-#
-# Результат:
-#   ${PREFIX}0GenericAffine.mat   — файл с матрицей аффинного преобразования
-#   ${PREFIX}Warped.nii.gz        — moving, пересемплированный в пространство fixed
-#   ${PREFIX}InverseWarped.nii.gz — fixed, «обратно» реземплированный (не обязателен)
-#   ${PREFIX}Affine.txt           — лог аффинной регистрации
-# -------------------------------------------------------
-echo "=== Step 1: affine registration with ANTs ==="
+### --- Шаг 1: аффинная регистрация --- ###
+echo "=== Step 1: affine registration ==="
 antsRegistrationSyN.sh \
   -d 3 \
   -f "$FIXED_IMAGE" \
   -m "$MOVING_IMAGE" \
-  -o "${PREFIX}" \
+  -o "$PREFIX" \
   -t a
 
-# Проверяем, что файл ${PREFIX}0GenericAffine.mat действительно создан
 AFFINE_MAT="${PREFIX}0GenericAffine.mat"
-if [ ! -f "$AFFINE_MAT" ]; then
-  echo "Error: affine transform file not found at '$AFFINE_MAT'"
-  exit 1
-fi
+[ ! -f "$AFFINE_MAT" ] && error "Файл аффинного преобразования не найден: $AFFINE_MAT"
 
-# -------------------------------------------------------
-# 2. Применение аффинного преобразования (если нужно ещё раз явно)
-#
-# Результат: ${OUTPUT_DIR}/subject_T1_MNI305.nii.gz
-# -------------------------------------------------------
-echo "=== Step 2: (optional) apply affine transform explicitly ==="
+### --- Шаг 2: применение преобразования (необязательное) --- ###
+echo "=== Step 2: apply affine transform ==="
 REGISTERED_EXPLICIT="${OUTPUT_DIR}/subject_T1_MNI305.nii.gz"
 antsApplyTransforms \
   -d 3 \
@@ -154,19 +132,12 @@ antsApplyTransforms \
   -t "$AFFINE_MAT" \
   --interpolation Linear
 
-# -------------------------------------------------------
-# 3. Итоги
-# -------------------------------------------------------
+### --- Шаг 3: финал --- ###
 echo
-echo "=== Registration completed ==="
-echo "Fixed (MNI305)       : $FIXED_IMAGE"
-echo "Moving (subject)     : $MOVING_IMAGE"
-echo
-echo "Affine matrix saved as:    $AFFINE_MAT"
-echo "Implicitly warped image:   ${PREFIX}Warped.nii.gz"
-echo "Explicitly warped image:   $REGISTERED_EXPLICIT"
-echo
-echo "Теперь эти файлы готовы к инференсу (MONAI Label)."
-echo "Проверьте результат, открыв ${PREFIX}Warped.nii.gz (или $REGISTERED_EXPLICIT) вместе с шаблоном."
+echo "=== Регистрация завершена ==="
+echo "Fixed:     $FIXED_IMAGE"
+echo "Moving:    $MOVING_IMAGE"
+echo "Matrix:    $AFFINE_MAT"
+echo "Warped:    ${PREFIX}Warped.nii.gz"
+echo "Explicit:  $REGISTERED_EXPLICIT"
 echo "=============================================="
-

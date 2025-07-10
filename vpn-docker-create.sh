@@ -18,6 +18,8 @@ RUN apt update && apt install -y \
     wireguard \
     iproute2 \
     iputils-ping \
+    git \
+    cmake \
     openresolv \
     && ln -sf /usr/bin/python3 /usr/bin/python \
     && ln -sf /usr/local/bin/openai /usr/bin/openai
