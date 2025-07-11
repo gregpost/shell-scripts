@@ -1,175 +1,187 @@
 #!/usr/bin/env bash
-
-# ==================== ROOT PATH ==========================
-ROOT_DIR="/data/qt"
-
-# ==================== QT VERSION =========================
-MAJOR="6"
-MINOR="8"
-PATCH="0"
-QT_VERSION="$MAJOR.$MINOR.$PATCH"
-QT_TAG="v$QT_VERSION"
-
-# Module repo URLs
-QTBASE_REPO="https://code.qt.io/qt/qtbase.git"
-QT5COMPAT_REPO="https://code.qt.io/qt/qt5compat.git"
-
-# ====================== CONFIG ===========================
-SRC_DIR="$ROOT_DIR/src"
-BUILD_DIR="$ROOT_DIR/build"
-INSTALL_PREFIX="$ROOT_DIR"
-
-QT_BASE_SRC="$SRC_DIR/qtbase"
-QT_COMPAT_SRC="$SRC_DIR/qt5compat"
-
-QT_BASE_BUILD="$BUILD_DIR/qt-base"
-QT_COMPAT_BUILD="$BUILD_DIR/qt-compat"
-
-# Flags
-FORCE=false
-SKIP_QT5COMPAT=false
 set -euo pipefail
 
-# ======================== PARSING ========================
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# ============= ROOT PATH (FILL ONLY THIS) ================
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ROOT_DIR="${ROOT_DIR:-/data/qt}"
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+# README:
+# This script installs Qt6 + Qt5 Compatibility module to the ROOT_DIR
+#
+# Usage:
+# --force: completely remove all files (source code will be downloaded again)
+# --force-build: clear only the build and install directory
+# --skip-qt5compat: skip Qt5 Compatibility module
+
+
+# ==================== QT VERSION =========================
+MAJOR="6"; MINOR="8"; PATCH="0"
+QT_VERSION="$MAJOR.$MINOR.$PATCH"
+QT_ROOT_URL="https://mirror.yandex.ru/mirrors/qt.io/official_releases/qt/$MAJOR.$MINOR/$QT_VERSION"
+QT_BASE_ARCHIVE="qt-everywhere-src-$QT_VERSION.tar.xz"
+QT_BASE_URL="$QT_ROOT_URL/single/$QT_BASE_ARCHIVE"
+QT5_COMPAT_ARCHIVE="qt5compat-everywhere-src-$QT_VERSION.tar.xz"
+QT5_COMPAT_URL="$QT_ROOT_URL/submodules/$QT5_COMPAT_ARCHIVE"
+
+echo "📁 ROOT_DIR = $ROOT_DIR"
+echo "🌐 QT_BASE_URL     = $QT_BASE_URL"
+
+SRC_DIR="$ROOT_DIR/src"
+BUILD_DIR="$ROOT_DIR/build"
+INSTALL_PREFIX="$ROOT_DIR/qt-install"
+
+QT_SRC="$SRC_DIR/qt-everywhere-src-$QT_VERSION"
+QT5COMPAT_SRC="$SRC_DIR/qt5compat-everywhere-src-$QT_VERSION"
+QT_BUILD="$BUILD_DIR/qt6"
+QT5COMPAT_BUILD="$BUILD_DIR/qt5compat"
+
+# ========== Обработка аргументов ==========
+FORCE_ALL=false
+FORCE_BUILD=false
+SKIP_QT5COMPAT=false
 for arg in "$@"; do
   case "$arg" in
-    --force)
-      FORCE=true
-      echo "⚠️  Force rebuild enabled"
-      ;;
-    --skip-qt5compat)
-      SKIP_QT5COMPAT=true
-      echo "⚠️  Skipping Qt5Compat module"
-      ;;
-    *)
-      # ignore other args
-      ;;
+    --force)           FORCE_ALL=true ;;
+    --force-build)     FORCE_BUILD=true ;;
+    --skip-qt5compat)  SKIP_QT5COMPAT=true ;;
+    *) ;;
   esac
 done
 
-# ======================= HELPERS =========================
-check_success() {
-  if [ $? -ne 0 ]; then
-    echo "❌ Error: $1"
-    exit 1
+echo "FORCE_ALL = $FORCE_ALL"
+echo "FORCE_BUILD = $FORCE_BUILD"
+echo "SKIP_QT5COMPAT = $SKIP_QT5COMPAT"
+
+err() { echo "❌ $*" >&2; exit 1; }
+
+# Проверка и установка зависимостей xcb
+REQUIRED_PKGS=(
+  libx11-dev libx11-xcb-dev libxcb1-dev libxcb-glx0-dev libxcb-icccm4-dev
+  libxcb-image0-dev libxcb-keysyms1-dev libxcb-randr0-dev libxcb-render-util0-dev
+  libxcb-shape0-dev libxcb-shm0-dev libxcb-sync-dev libxcb-xfixes0-dev
+  libxcb-xinerama0-dev libxcb-xkb-dev libxcb-cursor-dev libxkbcommon-dev
+  libxkbcommon-x11-dev
+)
+
+MISSING_PKGS=()
+for pkg in "${REQUIRED_PKGS[@]}"; do
+  if ! dpkg -s "$pkg" &>/dev/null; then
+    MISSING_PKGS+=("$pkg")
   fi
-}
+done
 
-clone_module() {
-  local repo_url="$1"
-  local dest_dir="$2"
-  local module_name="$3"
+if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
+  echo "📦 Installing missing packages: ${MISSING_PKGS[*]}"
+  sudo apt-get update
+  sudo apt-get install -y "${MISSING_PKGS[@]}"
+else
+  echo "✅ All required xcb packages are already installed."
+fi
 
-  if [ "$FORCE" = true ] && [ -d "$dest_dir" ]; then
-    echo "🗑️  Removing old $module_name source"
-    rm -rf "$dest_dir"
-  fi
+# Полная очистка при --force
+if [ "$FORCE_ALL" = true ] && [ -d "$ROOT_DIR" ]; then
+  echo "⚠️  --force: removing $ROOT_DIR"
+  rm -rf "$ROOT_DIR"
+fi
 
-  if [ ! -d "$dest_dir" ]; then
-    echo "⬇️  Cloning $module_name from $repo_url (tag $QT_TAG)..."
-    git clone --depth 1 --branch "$QT_TAG" "$repo_url" "$dest_dir"
-    check_success "Failed to clone $module_name"
-  else
-    echo "✅  $module_name source already exists"
-    cd "$dest_dir"
-    git fetch --depth 1 origin "$QT_TAG"
-    git checkout "$QT_TAG"
-    check_success "Failed to update $module_name to $QT_TAG"
-    cd - >/dev/null
-  fi
-}
+# Очистка только build при --force-build
+if [ "$FORCE_BUILD" = true ] && [ -d "$BUILD_DIR" ]; then
+  echo "⚠️  --force-build: removing $BUILD_DIR and $INSTALL_PREFIX"
+  rm -rf "$BUILD_DIR"
+  rm -rf "$INSTALL_PREFIX"
+fi
 
-build_module() {
-  local src_dir="$1"
-  local build_dir="$2"
-  local module_name="$3"
-
-  if [ "$FORCE" = true ]; then
-    echo "🗑️  Removing old build dir for $module_name"
-    rm -rf "$build_dir"
-  fi
-
-  if [ ! -d "$build_dir" ]; then
-    mkdir -p "$build_dir"
-    check_success "Could not create $build_dir"
-  fi
-
-  echo "⚙️  Configuring $module_name..."
-  rm -f "$build_dir/CMakeCache.txt"
-
-  # Ensure environment variables won't cause unbound errors
-  export PATH="$INSTALL_PREFIX/bin:$PATH"
-  export LD_LIBRARY_PATH="$INSTALL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
-  export CMAKE_PREFIX_PATH="$INSTALL_PREFIX/lib/cmake${CMAKE_PREFIX_PATH:+:}${CMAKE_PREFIX_PATH:-}"
-
-  cmake -S "$src_dir" -B "$build_dir" \
-    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-    -DCMAKE_PREFIX_PATH="$INSTALL_PREFIX/lib/cmake" \
-    -DQt6_DIR="$INSTALL_PREFIX/lib/cmake/Qt6" \
-    -DQT_NO_PACKAGE_VERSION_CHECK=TRUE \
-    -DQT_NO_PACKAGE_VERSION_INCOMPATIBLE_WARNING=TRUE
-  check_success "CMake configuration for $module_name failed"
-
-  echo "🏗️  Building $module_name..."
-  make -C "$build_dir" -j"$(nproc)"
-  check_success "Build for $module_name failed"
-}
-
-install_module() {
-  local build_dir="$1"
-  local module_name="$2"
-  local config_file="$INSTALL_PREFIX/lib/cmake/Qt6/Qt6Config.cmake"
-
-  echo "📦 Installing $module_name..."
-  make -C "$build_dir" install
-  check_success "Installation for $module_name failed"
-
-  if [ ! -f "$config_file" ]; then
-    echo "❌ Error: Qt6Config.cmake not found after installing $module_name"
-    exit 1
-  fi
-}
-
-# ====================== MAIN FLOW ========================
-
-echo "📁 Preparing directories..."
+echo "📁 Prepare dirs..."
 mkdir -p "$SRC_DIR" "$BUILD_DIR" "$INSTALL_PREFIX"
 
-# Clone Qt Base always
-clone_module "$QTBASE_REPO" "$QT_BASE_SRC" "Qt Base"
-
-# Clone Qt5Compat only if not skipped
-if [ "$SKIP_QT5COMPAT" = false ]; then
-  clone_module "$QT5COMPAT_REPO" "$QT_COMPAT_SRC" "Qt 5Compat"
+# ========== Qt Base sources ==========
+QT_BASE_ARCHIVE_PATH="$SRC_DIR/$QT_BASE_ARCHIVE"
+if [ ! -d "$QT_SRC" ]; then
+  [ -f "$QT_BASE_ARCHIVE_PATH" ] || {
+    echo "⬇️  Downloading Qt base..."
+    curl -L -o "$QT_BASE_ARCHIVE_PATH" "$QT_BASE_URL" || err "Download failed"
+  }
+  tar -xf "$QT_BASE_ARCHIVE_PATH" -C "$SRC_DIR" || err "Extraction failed"
 fi
 
-# Set environment for local Qt (guard unbound)
-echo "🌐 Setting environment for local Qt"
-export PATH="$INSTALL_PREFIX/bin:$PATH"
-export LD_LIBRARY_PATH="$INSTALL_PREFIX/lib:${LD_LIBRARY_PATH:-}"
-export CMAKE_PREFIX_PATH="$INSTALL_PREFIX/lib/cmake${CMAKE_PREFIX_PATH:+:}${CMAKE_PREFIX_PATH:-}"
-
-# Build Qt Base
-build_module "$QT_BASE_SRC" "$QT_BASE_BUILD" "Qt Base"
-
-# Build Qt5Compat if not skipped
+# ========== qt5compat sources (если нужно) ==========
 if [ "$SKIP_QT5COMPAT" = false ]; then
-  build_module "$QT_COMPAT_SRC" "$QT_COMPAT_BUILD" "Qt 5Compat"
+  QT5_COMPAT_ARCHIVE_PATH="$SRC_DIR/$QT5_COMPAT_ARCHIVE"
+  if [ ! -d "$QT5COMPAT_SRC" ]; then
+    [ -f "$QT5_COMPAT_ARCHIVE_PATH" ] || {
+      echo "⬇️  Downloading qt5compat from $QT5_COMPAT_URL"
+      curl -L -o "$QT5_COMPAT_ARCHIVE_PATH" "$QT5_COMPAT_URL" || err "qt5compat download failed"
+    }
+    tar -xf "$QT5_COMPAT_ARCHIVE_PATH" -C "$SRC_DIR" || err "qt5compat extract failed"
+  fi
 fi
 
-# Install Qt Base
-install_module "$QT_BASE_BUILD" "Qt Base"
+# ========== Модули, которые мы пропускаем ==========
+ALL_MODULES=(
+  qt3d qt3danimation qt3dcore qt3dextras qt3dinput qt3dlogic qt3drender qt3dscene2d
+  qtactiveqt qtaxcontainer qtaxserver
+  qtbluetooth qtcharts qtcoap qtconcurrent qtdatavis3d qtdesigner qtdoc
+  qtgamepad qtgrpc qtgraphs qthttpserver qthelp
+  qtlanguageserver qtlocation qtlottie qtmqtt qtmultimedia
+  qtnfc qtnetworkauth qtopcua qtopengl qtpdf qtpositioning qtprintsupport
+  qtquick3d qtquick3dphysics qtquickcontrols qtquickcontrols2 qtquicktest qtquicktimeline qtquickeffectmaker qtquickwidgets
+  qtremoteobjects qtscxml qtsensors qtserialbus qtserialport qtspatialaudio
+  qtstatemachine qtspeech qtsql qtsvg qttexttospeech qttranslations
+  qtuitools qtvirtualkeyboard qtwaylandcompositor
+  qtwebchannel qtwebengine qtwebenginecore qtwebenginequick qtwebenginewidgets qtwebglplugin qtwebsockets qtwebview
+  qtxml qtxmlpatterns qttools
+  qtcanvas3d qtconnectivity qtgraphicaleffects qtpurchasing qtscript
+  qtimageformats qtshadertools qtdeclarative
+  qtx11extras
+)
 
-# Install Qt5Compat if not skipped
-if [ "$SKIP_QT5COMPAT" = false ]; then
-  install_module "$QT_COMPAT_BUILD" "Qt 5Compat"
+SKIP_FLAGS=()
+for m in "${ALL_MODULES[@]}"; do
+  SKIP_FLAGS+=("-skip" "$m")
+done
+if [ "$SKIP_QT5COMPAT" = true ]; then
+  SKIP_FLAGS+=("-skip" "qt5compat")
 fi
 
-# Validate qmake
-QMAKE_PATH="$INSTALL_PREFIX/bin/qmake"
-if [ ! -f "$QMAKE_PATH" ]; then
-  echo "❌ qmake not found at $QMAKE_PATH"
-  exit 1
+# ========== Сборка Qt Base ==========
+echo "⚙️  Configuring Qt6 (qtbase only)..."
+mkdir -p "$QT_BUILD" && pushd "$QT_BUILD" >/dev/null
+
+# This flags need to reduce build size:
+# -reduce-exports, -no-pch, -no-gtk, -no-cups, -no-gbm
+# -nomake examples -nomake tests
+bash "$QT_SRC/configure" \
+  --prefix="$INSTALL_PREFIX" \
+  -opensource -confirm-license -release \
+  -nomake examples -nomake tests \
+  -reduce-exports \
+  -no-pch \
+  -no-gtk \
+  -no-cups \
+  -no-gbm \
+  "${SKIP_FLAGS[@]}" || err "configure failed"
+
+echo "🏗️  Building Qt6..."
+cmake --build . --parallel || err "build failed"
+
+echo "📦 Installing Qt6..."
+cmake --install . || err "install failed"
+popd >/dev/null
+
+if [ "$SKIP_QT5COMPAT" = false ]; then
+  echo "⚙️  Configuring qt5compat..."
+  mkdir -p "$QT5COMPAT_BUILD" && pushd "$QT5COMPAT_BUILD" >/dev/null
+  cmake "$QT5COMPAT_SRC" -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" || err "cmake failed"
+  echo "🏗️  Building qt5compat..."
+  cmake --build . --parallel || err "qt5compat build failed"
+  echo "📦 Installing qt5compat..."
+  cmake --install . || err "qt5compat install failed"
+  popd >/dev/null
 fi
 
 echo "✅ Qt $QT_VERSION installed in $INSTALL_PREFIX"
+echo "   Add to PATH: export PATH=\"$INSTALL_PREFIX/bin:\$PATH\""
