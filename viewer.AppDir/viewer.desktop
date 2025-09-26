@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=viewer
+Exec=viewer
+Icon=artvision
+Type=Application
+Terminal=false
+Categories=Utility
