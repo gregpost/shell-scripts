@@ -122,7 +122,10 @@ if [ "$USE_NGROK" = true ]; then
     sleep 5
     TUNNEL_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | grep -oE 'https://[a-z0-9.-]+\.ngrok-free\.app' | head -n1)
 else
-    nohup ssh -o ServerAliveInterval=60 -R 80:localhost:$APP_PORT nokey@localhost.run >"$TUNNEL_LOG" 2>&1 &
+    # добавляем опции, чтобы подавить yes/no/fingerprint
+    nohup ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+          -o ServerAliveInterval=60 -R 80:localhost:$APP_PORT nokey@localhost.run \
+          >"$TUNNEL_LOG" 2>&1 &
     sleep 3
     TUNNEL_URL=$(grep -oE 'https://[a-z0-9.-]+\.lhr\.life' "$TUNNEL_LOG" | tail -n1)
 fi
