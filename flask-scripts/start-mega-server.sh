@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-APP_DIR="/data2/tmp"
+APP_DIR="/data/flask/tmp"
 APP_PORT=3000
 TOKEN_FILE="$APP_DIR/token.txt"
 TUNNEL_LOG="/tmp/localhost_run.log"
