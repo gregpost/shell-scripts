@@ -7,7 +7,7 @@ MOUNTPOINT="/mnt"
 echo "=== Step 1: Show available disks ==="
 lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL
 
-read -rp "Enter the disk number to install (e.g., 0 for /dev/sda): " DISKNUM
+read -rp "Enter the disk number to install (e.g., 0, 1, 2...): " DISKNUM
 DISK="/dev/sd${DISKNUM}"
 echo "Selected disk: $DISK"
 
