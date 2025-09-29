@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Arch Linux safe installer with partition number selection
+# Arch Linux safe installer with partition number selection and confirmation
 set -e
 
 MOUNTPOINT="/mnt"
@@ -7,16 +7,28 @@ MOUNTPOINT="/mnt"
 echo "=== Step 1: Show available disks ==="
 lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL
 
-read -rp "Enter the disk number to install (e.g., 1, 2, 3...): " DISKNUM
+# Выбор диска
+read -rp "Enter the disk number to install (e.g., 0 for /dev/sda): " DISKNUM
 DISK="/dev/sd${DISKNUM}"
-echo "Selected disk: $DISK"
 
-# Check if disk exists
+# Проверяем существование
 if [ ! -b "$DISK" ]; then
     echo "Error: Disk $DISK not found"
     exit 1
 fi
 
+# Показываем выбранный диск и информацию о нём
+echo "You selected disk: $DISK"
+lsblk "$DISK" -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL
+
+# Подтверждение
+read -rp "Are you sure you want to use this disk? All data on it may be lost! (yes/no): " CONFIRM
+if [[ "$CONFIRM" != "yes" ]]; then
+    echo "Installation aborted by user."
+    exit 0
+fi
+
+echo "=== Step 2: Partition & Format Disk ==="
 # Partitioning (GPT + EFI + root) if not exists
 if ! blkid "${DISK}2" >/dev/null 2>&1; then
     echo "Creating GPT and partitions..."
@@ -32,18 +44,22 @@ fi
 if ! mount | grep -q "${DISK}1"; then
     echo "Formatting EFI partition..."
     mkfs.fat -F32 -n EFI "${DISK}1"
+else
+    echo "EFI partition already mounted, skipping formatting"
 fi
 
 if ! mount | grep -q "${DISK}2"; then
     echo "Formatting ROOT partition..."
     mkfs.ext4 -F -L ROOT "${DISK}2"
+else
+    echo "ROOT partition already mounted, skipping formatting"
 fi
 
-echo "=== Step 2: Mount partitions ==="
+echo "=== Step 3: Mount partitions ==="
 mount --mkdir "${DISK}2" "$MOUNTPOINT"
 mount --mkdir "${DISK}1" "$MOUNTPOINT/boot"
 
-echo "=== Step 3: Install base system if not installed ==="
+echo "=== Step 4: Install base system if not installed ==="
 if [ ! -f "$MOUNTPOINT/etc/arch-release" ]; then
     echo "Installing base system..."
     pacstrap -K "$MOUNTPOINT" base linux linux-firmware mkinitcpio
@@ -51,7 +67,7 @@ else
     echo "Base system already installed, skipping pacstrap"
 fi
 
-echo "=== Step 4: Generate fstab ==="
+echo "=== Step 5: Generate fstab ==="
 if [ ! -f "$MOUNTPOINT/etc/fstab" ] || ! grep -q "${DISK}2" "$MOUNTPOINT/etc/fstab"; then
     genfstab -U "$MOUNTPOINT" >> "$MOUNTPOINT/etc/fstab"
     echo "fstab generated"
@@ -59,7 +75,7 @@ else
     echo "fstab already exists, skipping"
 fi
 
-echo "=== Step 5: Chroot configuration (packages, user, GUI) ==="
+echo "=== Step 6: Chroot configuration (packages, user, GUI) ==="
 arch-chroot "$MOUNTPOINT" bash <<'EOF'
 set -e
 
