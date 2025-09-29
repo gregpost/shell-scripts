@@ -8,13 +8,7 @@ MOUNTPOINT="/mnt"
 
 echo "=== Step 1: Partition & Format Disk ==="
 
-# Размонтируем, если уже смонтировано
-if mountpoint -q "$MOUNTPOINT"; then
-    echo "$MOUNTPOINT уже смонтирован, размонтируем..."
-    umount -R "$MOUNTPOINT"
-fi
-
-# Создаём разделы только если их нет
+# Разделы создаём только если их нет
 if ! blkid "${DISK}2" >/dev/null 2>&1; then
     echo "Создаём GPT и разделы..."
     parted --script "$DISK" mklabel gpt
@@ -25,14 +19,16 @@ else
     echo "Разделы уже существуют, форматирование пропускаем"
 fi
 
-# Форматируем раздела только если они не смонтированы
+# Форматируем только если разделы не смонтированы
 if ! mount | grep -q "${DISK}1"; then
+    echo "Форматируем EFI-раздел..."
     mkfs.fat -F32 -n EFI "${DISK}1"
 else
     echo "${DISK}1 уже смонтирован, форматирование пропускаем"
 fi
 
 if ! mount | grep -q "${DISK}2"; then
+    echo "Форматируем ROOT-раздел..."
     mkfs.ext4 -F -L ROOT "${DISK}2"
 else
     echo "${DISK}2 уже смонтирован, форматирование пропускаем"
@@ -70,7 +66,7 @@ cat <<EOT > /etc/hosts
 EOT
 fi
 
-# Root password
+# Root password (если ещё не установлен)
 if ! grep -q root /etc/shadow; then
     echo "Set root password:"
     passwd
