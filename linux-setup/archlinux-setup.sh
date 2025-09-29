@@ -1,51 +1,67 @@
 #!/usr/bin/env bash
-# Arch Linux setup on VirtualBox with XFCE (based on official guide)
+# Arch Linux safe installer (real hardware or VirtualBox)
 set -e
 
-DISK="/dev/sda"
-HOSTNAME="arch-vm"
 MOUNTPOINT="/mnt"
 
-echo "=== Step 1: Partition & Format Disk ==="
+echo "=== Step 1: Show available disks ==="
+lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL
 
-# Разделы создаём только если их нет
+read -rp "Enter the disk for installation (e.g., /dev/sda): " DISK
+echo "Selected disk: $DISK"
+
+# Check if disk exists
+if [ ! -b "$DISK" ]; then
+    echo "Error: Disk $DISK not found"
+    exit 1
+fi
+
+# Partitioning (GPT + EFI + root) if not exists
 if ! blkid "${DISK}2" >/dev/null 2>&1; then
-    echo "Создаём GPT и разделы..."
+    echo "Creating GPT and partitions..."
     parted --script "$DISK" mklabel gpt
     parted --script "$DISK" mkpart ESP fat32 1MiB 513MiB
     parted --script "$DISK" set 1 esp on
     parted --script "$DISK" mkpart primary ext4 513MiB 100%
 else
-    echo "Разделы уже существуют, форматирование пропускаем"
+    echo "Partitions already exist, skipping partitioning"
 fi
 
-# Форматируем только если разделы не смонтированы
+# Format if not mounted
 if ! mount | grep -q "${DISK}1"; then
-    echo "Форматируем EFI-раздел..."
+    echo "Formatting EFI partition..."
     mkfs.fat -F32 -n EFI "${DISK}1"
-else
-    echo "${DISK}1 уже смонтирован, форматирование пропускаем"
 fi
 
 if ! mount | grep -q "${DISK}2"; then
-    echo "Форматируем ROOT-раздел..."
+    echo "Formatting ROOT partition..."
     mkfs.ext4 -F -L ROOT "${DISK}2"
-else
-    echo "${DISK}2 уже смонтирован, форматирование пропускаем"
 fi
 
-echo "=== Step 2: Mount Disk ==="
+echo "=== Step 2: Mount partitions ==="
 mount --mkdir "${DISK}2" "$MOUNTPOINT"
 mount --mkdir "${DISK}1" "$MOUNTPOINT/boot"
 
-echo "=== Step 3: Install Base System ==="
-pacstrap -K "$MOUNTPOINT" base linux linux-firmware mkinitcpio
+echo "=== Step 3: Install base system if not installed ==="
+if [ ! -f "$MOUNTPOINT/etc/arch-release" ]; then
+    echo "Installing base system..."
+    pacstrap -K "$MOUNTPOINT" base linux linux-firmware mkinitcpio
+else
+    echo "Base system already installed, skipping pacstrap"
+fi
 
 echo "=== Step 4: Generate fstab ==="
-genfstab -U "$MOUNTPOINT" >> "$MOUNTPOINT/etc/fstab"
+if [ ! -f "$MOUNTPOINT/etc/fstab" ] || ! grep -q "${DISK}2" "$MOUNTPOINT/etc/fstab"; then
+    genfstab -U "$MOUNTPOINT" >> "$MOUNTPOINT/etc/fstab"
+    echo "fstab generated"
+else
+    echo "fstab already exists, skipping"
+fi
 
-echo "=== Step 5: Chroot configuration ==="
-arch-chroot "$MOUNTPOINT" <<EOF
+echo "=== Step 5: Chroot configuration (packages, user, GUI) ==="
+arch-chroot "$MOUNTPOINT" bash <<'EOF'
+set -e
+
 # Timezone
 ln -sf /usr/share/zoneinfo/Europe/Moscow /etc/localtime
 hwclock --systohc
@@ -57,6 +73,7 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf
 echo "KEYMAP=us" > /etc/vconsole.conf
 
 # Hostname
+HOSTNAME="arch-vm"
 echo "$HOSTNAME" > /etc/hostname
 if ! grep -q "$HOSTNAME" /etc/hosts; then
 cat <<EOT > /etc/hosts
@@ -66,40 +83,50 @@ cat <<EOT > /etc/hosts
 EOT
 fi
 
-# Root password (если ещё не установлен)
+# Root password (ask only if empty)
 if ! grep -q root /etc/shadow; then
     echo "Set root password:"
     passwd
 fi
 
-# Network + mc
-pacman -S --noconfirm networkmanager iptables mc
+# Network + utilities (mc, nano)
+pacman -S --needed --noconfirm networkmanager iptables mc nano
+
 systemctl enable NetworkManager
 
 # Bootloader
-pacman -S --noconfirm grub efibootmgr
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
-grub-mkconfig -o /boot/grub/grub.cfg
+if [ ! -d /boot/grub ]; then
+    pacman -S --noconfirm grub efibootmgr
+    grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+    grub-mkconfig -o /boot/grub/grub.cfg
+fi
+
+# VirtualBox detection and Guest Additions
+if systemd-detect-virt | grep -iq virtualbox; then
+    echo "Detected VirtualBox, installing guest-utils..."
+    pacman -S --needed --noconfirm virtualbox-guest-utils
+    systemctl enable vboxservice
+fi
 EOF
 
-# Optional: user
+# Optional: create user if not exists
 read -rp "Enter new username (leave empty to skip): " USERNAME
 if [ -n "$USERNAME" ]; then
-    if ! id "$USERNAME" >/dev/null 2>&1; then
+    if ! arch-chroot "$MOUNTPOINT" id "$USERNAME" >/dev/null 2>&1; then
         arch-chroot "$MOUNTPOINT" useradd -m -G wheel -s /bin/bash "$USERNAME"
         echo "Set password for $USERNAME:"
         arch-chroot "$MOUNTPOINT" passwd "$USERNAME"
         echo "%wheel ALL=(ALL) ALL" | arch-chroot "$MOUNTPOINT" tee /etc/sudoers.d/wheel
     else
-        echo "Пользователь $USERNAME уже существует, пропускаем"
+        echo "User $USERNAME already exists, skipping"
     fi
 fi
 
-# Optional: GUI
+# Optional: install XFCE GUI
 read -rp "Install XFCE + LightDM? (y/N): " GUI
 if [[ "$GUI" =~ ^[Yy]$ ]]; then
-    arch-chroot "$MOUNTPOINT" pacman -S --noconfirm xorg-server xorg-xinit xfce4 xfce4-terminal lightdm lightdm-gtk-greeter
+    arch-chroot "$MOUNTPOINT" pacman -S --needed --noconfirm xorg-server xorg-xinit xfce4 xfce4-terminal lightdm lightdm-gtk-greeter
     arch-chroot "$MOUNTPOINT" systemctl enable lightdm.service
 fi
 
-echo "=== Arch Linux installation complete! Reboot recommended. ==="
+echo "=== Arch Linux installation complete! Reboot to use your persistent system ==="
