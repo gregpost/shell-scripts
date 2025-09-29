@@ -22,7 +22,8 @@ mount "${DISK}2" /mnt
 mount --mkdir "${DISK}1" /mnt/boot
 
 echo "=== Step 3: Install Base System ==="
-pacstrap -K /mnt base linux linux-firmware
+# Явно указываем mkinitcpio как initramfs provider, чтобы не было ручного выбора
+pacstrap -K /mnt base linux linux-firmware mkinitcpio
 
 echo "=== Step 4: Generate fstab ==="
 genfstab -U /mnt >> /mnt/etc/fstab
@@ -51,8 +52,8 @@ EOT
 echo "Set root password:"
 passwd
 
-# Network
-pacman -S --noconfirm networkmanager
+# Network + mc
+pacman -S --noconfirm networkmanager iptables mc
 systemctl enable NetworkManager
 
 # Bootloader
