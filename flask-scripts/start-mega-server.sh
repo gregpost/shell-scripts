@@ -10,6 +10,7 @@ set -euo pipefail
 
 APP_DIR="/data/flask/tmp"
 APP_PORT=3000
+BRIDGE_PORT=4000
 TOKEN_FILE="$APP_DIR/token.txt"
 TUNNEL_LOG="/tmp/localhost_run.log"
 
@@ -72,11 +73,12 @@ APP_FILE="$APP_DIR/app.py"
 
 cat > "$APP_FILE" <<EOF
 from flask import Flask, request, jsonify, send_from_directory
-import subprocess, os
+import subprocess, os, requests
 
 app = Flask(__name__)
 TOKEN = "$TOKEN"
 APP_DIR = "$APP_DIR"
+BRIDGE_PORT = $BRIDGE_PORT
 
 @app.route("/", methods=["GET"])
 def index():
@@ -97,6 +99,18 @@ def run_cmd():
         output = e.output
     return jsonify({"output": output})
 
+@app.route("/ai", methods=["POST"])
+def ai_proxy():
+    auth = request.headers.get("Authorization","")
+    if auth != f"Bearer {TOKEN}":
+        return jsonify({"error":"Unauthorized"}), 403
+    data = request.get_json(force=True)
+    try:
+        r = requests.post(f"http://127.0.0.1:{BRIDGE_PORT}/ai", json=data, timeout=600)
+        return (r.text, r.status_code, r.headers.items())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=$APP_PORT)
 EOF
@@ -105,6 +119,16 @@ EOF
 if ! lsof -i :$APP_PORT -sTCP:LISTEN &>/dev/null; then
     nohup python3 "$APP_FILE" >/tmp/termrelay_app.log 2>&1 &
     sleep 2
+fi
+
+# -------------------- запускаем bridge --------------------
+if ! lsof -i :$BRIDGE_PORT -sTCP:LISTEN &>/dev/null; then
+    if [ ! -f "$APP_DIR/chatgpt_bridge.py" ]; then
+        echo "Ошибка: chatgpt_bridge.py не найден в $APP_DIR"
+        exit 1
+    fi
+    nohup python3 "$APP_DIR/chatgpt_bridge.py" >/tmp/chatgpt_bridge.log 2>&1 &
+    sleep 3
 fi
 
 # -------------------- открываем туннель --------------------
@@ -122,7 +146,6 @@ if [ "$USE_NGROK" = true ]; then
     sleep 5
     TUNNEL_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | grep -oE 'https://[a-z0-9.-]+\.ngrok-free\.app' | head -n1)
 else
-    # добавляем опции, чтобы подавить yes/no/fingerprint
     nohup ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
           -o ServerAliveInterval=60 -R 80:localhost:$APP_PORT nokey@localhost.run \
           >"$TUNNEL_LOG" 2>&1 &
