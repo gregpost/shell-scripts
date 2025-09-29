@@ -29,7 +29,7 @@ echo "=== Step 4: Generate fstab ==="
 genfstab -U /mnt >> /mnt/etc/fstab
 
 echo "=== Step 5: Chroot configuration ==="
-arch-chroot /mnt <<'EOF'
+arch-chroot /mnt << EOF
 # Timezone
 ln -sf /usr/share/zoneinfo/Europe/Moscow /etc/localtime
 hwclock --systohc
