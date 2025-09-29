@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# File: setup-arch-vbox-min.sh
+# File: archlinux-setup.sh
 # Purpose: Minimal Arch Linux setup for VirtualBox VM with GNOME, low disk usage
 # Run as root
 
