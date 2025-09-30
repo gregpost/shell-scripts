@@ -9,7 +9,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Папка для локального хранилища пакетов
-LOCAL_REPO="/shared/arch_local_repo"
+LOCAL_REPO="./arc-repo"
 mkdir -p "$LOCAL_REPO"
 
 echo
