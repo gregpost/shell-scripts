@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-# Arch Linux safe installer with partition number selection and confirmation
+# Arch Linux safe installer with partition number selection, confirmation and logging
 set -e
 
 MOUNTPOINT="/mnt"
+LOGFILE="/shared/log.txt"
+
+# Создаём лог-файл, дублируем stdout/stderr
+exec > >(tee -a "$LOGFILE") 2>&1
+
+echo "=== Step 0: Start Arch Linux installer ==="
 
 echo "=== Step 1: Show available disks ==="
 DISKS=($(lsblk -dno NAME,SIZE))   # получаем список: NAME SIZE NAME SIZE ...
@@ -39,7 +45,6 @@ if [[ "$CONFIRM" != "yes" ]]; then
 fi
 
 echo "=== Step 2: Partition & Format Disk ==="
-# Partitioning (GPT + EFI + root) if not exists
 if ! blkid "${DISK}2" >/dev/null 2>&1; then
     echo "Creating GPT and partitions..."
     parted --script "$DISK" mklabel gpt
@@ -143,7 +148,9 @@ if [ -n "$USERNAME" ]; then
         arch-chroot "$MOUNTPOINT" useradd -m -G wheel -s /bin/bash "$USERNAME"
         echo "Set password for $USERNAME:"
         arch-chroot "$MOUNTPOINT" passwd "$USERNAME"
-        echo "%wheel ALL=(ALL) ALL" | arch-chroot "$MOUNTPOINT" tee /etc/sudoers.d/wheel
+        # Создаём директорию sudoers.d, если нет
+        arch-chroot "$MOUNTPOINT" mkdir -p /etc/sudoers.d
+        arch-chroot "$MOUNTPOINT" bash -c 'echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel'
     else
         echo "User $USERNAME already exists, skipping"
     fi
