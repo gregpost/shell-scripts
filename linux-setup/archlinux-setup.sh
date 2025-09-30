@@ -106,17 +106,20 @@ echo
 mount --mkdir "${DISK}2" "$MOUNTPOINT"
 mount --mkdir "${DISK}1" "$MOUNTPOINT/boot"
 
-# Step 4: Install base system
-echo
-echo "=================================================="
-echo "=== Step 4: Install base system if not installed ==="
-echo "=================================================="
-echo
-if [ ! -f "$MOUNTPOINT/etc/arch-release" ]; then
-    echo "Installing base system..."
-    pacstrap -K --noconfirm "$MOUNTPOINT" base linux linux-firmware mkinitcpio
-else
-    echo "Base system already installed, skipping pacstrap"
+# Step 4 check: Ensure /mnt is empty
+if [ "$(ls -A "$MOUNTPOINT")" ]; then
+    echo
+    echo "Warning: $MOUNTPOINT is not empty. Previous installation files may exist."
+    read -rp "Do you want to unmount everything and clear $MOUNTPOINT? (yes/no): " UNMOUNT_CONFIRM
+    if [[ "$UNMOUNT_CONFIRM" == "yes" ]]; then
+        echo "Unmounting $MOUNTPOINT..."
+        umount -Rl "$MOUNTPOINT" || echo "Warning: Some mounts could not be unmounted."
+        echo "$MOUNTPOINT is now unmounted. You can retry the script."
+        exit 0
+    else
+        echo "Installation aborted by user due to non-empty $MOUNTPOINT."
+        exit 0
+    fi
 fi
 
 # Step 5: Generate fstab
