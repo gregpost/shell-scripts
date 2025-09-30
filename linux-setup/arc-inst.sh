@@ -43,9 +43,7 @@ if mountpoint -q "$MOUNTPOINT" || [ "$(ls -A "$MOUNTPOINT" 2>/dev/null)" ]; then
     read -rp "Do you want to unmount and clean $MOUNTPOINT? (yes/no): " CLEANMNT
     if [[ "$CLEANMNT" == "yes" ]]; then
         echo "Unmounting all mounts under $MOUNTPOINT..."
-        # Рекурсивно размонтируем все, игнорируя ошибки
         umount -Rl "$MOUNTPOINT" || echo "Warning: Some mounts could not be unmounted."
-        # Очищаем содержимое
         rm -rf "${MOUNTPOINT:?}/"*
         echo "$MOUNTPOINT is now clean and ready for installation."
         mkdir -p "$MOUNTPOINT"
@@ -61,7 +59,6 @@ echo "=== Step 3: Start Arch Linux installer ==="
 echo "=================================================="
 echo
 
-# Step 1: показать диски
 echo
 echo "=================================================="
 echo "=== Step 4: Show available disks ==="
@@ -96,7 +93,6 @@ if [[ "$CONFIRM" != "yes" ]]; then
     exit 0
 fi
 
-# Step 2: Partition & Format Disk
 echo
 echo "=================================================="
 echo "=== Step 5: Partition & Format Disk ==="
@@ -126,7 +122,6 @@ else
     echo "ROOT partition already mounted, skipping formatting"
 fi
 
-# Step 3: Mount partitions
 echo
 echo "=================================================="
 echo "=== Step 6: Mount partitions ==="
@@ -135,26 +130,13 @@ echo
 mount --mkdir "${DISK}2" "$MOUNTPOINT"
 mount --mkdir "${DISK}1" "$MOUNTPOINT/boot"
 
-# Step 4 check: Ensure /mnt is empty
-if [ "$(ls -A "$MOUNTPOINT")" ]; then
-    echo
-    echo "=================================================="
-    echo "WARNING: $MOUNTPOINT is not empty. Previous installation data may exist."
-    echo "=================================================="
-    read -rp "Do you want to unmount everything under $MOUNTPOINT and continue? (yes/no): " UNMOUNT_CONFIRM
-    if [[ "$UNMOUNT_CONFIRM" == "yes" ]]; then
-        echo "Unmounting all mounts under $MOUNTPOINT..."
-        # Рекурсивно размонтируем все, игнорируя ошибки
-        umount -Rl "$MOUNTPOINT" || echo "Warning: Some mounts could not be unmounted."
-        echo "$MOUNTPOINT is now unmounted and ready for installation."
-        mkdir -p "$MOUNTPOINT"
-    else
-        echo "Installation aborted by user due to non-empty $MOUNTPOINT."
-        exit 1
-    fi
+# Проверяем успешность монтирования
+if ! mountpoint -q "$MOUNTPOINT" || ! mountpoint -q "$MOUNTPOINT/boot"; then
+    echo "Error: partitions not mounted correctly!"
+    exit 1
 fi
+echo "Partitions mounted successfully."
 
-# Step 5: Generate fstab
 echo
 echo "=================================================="
 echo "=== Step 7: Generate fstab ==="
@@ -167,7 +149,6 @@ else
     echo "fstab already exists, skipping"
 fi
 
-# Step 6: Chroot configuration
 echo
 echo "=================================================="
 echo "=== Step 8: Chroot configuration (packages, user, GUI) ==="
