@@ -114,7 +114,7 @@ echo "=================================================="
 echo
 if [ ! -f "$MOUNTPOINT/etc/arch-release" ]; then
     echo "Installing base system..."
-    pacstrap -K "$MOUNTPOINT" base linux linux-firmware mkinitcpio
+    pacstrap -K --noconfirm "$MOUNTPOINT" base linux linux-firmware mkinitcpio
 else
     echo "Base system already installed, skipping pacstrap"
 fi
