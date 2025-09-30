@@ -43,9 +43,7 @@ if mountpoint -q "$MOUNTPOINT" || [ "$(ls -A "$MOUNTPOINT" 2>/dev/null)" ]; then
     read -rp "Do you want to unmount and clean $MOUNTPOINT? (yes/no): " CLEANMNT
     if [[ "$CLEANMNT" == "yes" ]]; then
         echo "Unmounting all mounts under $MOUNTPOINT..."
-        # Рекурсивно размонтируем все, игнорируя ошибки
         umount -Rl "$MOUNTPOINT" || echo "Warning: Some mounts could not be unmounted."
-        # Очищаем содержимое
         rm -rf "${MOUNTPOINT:?}/"*
         echo "$MOUNTPOINT is now clean and ready for installation."
         mkdir -p "$MOUNTPOINT"
@@ -135,29 +133,10 @@ echo
 mount --mkdir "${DISK}2" "$MOUNTPOINT"
 mount --mkdir "${DISK}1" "$MOUNTPOINT/boot"
 
-# Step 4 check: Ensure /mnt is empty
-if [ "$(ls -A "$MOUNTPOINT")" ]; then
-    echo
-    echo "=================================================="
-    echo "WARNING: $MOUNTPOINT is not empty. Previous installation data may exist."
-    echo "=================================================="
-    read -rp "Do you want to unmount everything under $MOUNTPOINT and continue? (yes/no): " UNMOUNT_CONFIRM
-    if [[ "$UNMOUNT_CONFIRM" == "yes" ]]; then
-        echo "Unmounting all mounts under $MOUNTPOINT..."
-        # Рекурсивно размонтируем все, игнорируя ошибки
-        umount -Rl "$MOUNTPOINT" || echo "Warning: Some mounts could not be unmounted."
-        echo "$MOUNTPOINT is now unmounted and ready for installation."
-        mkdir -p "$MOUNTPOINT"
-    else
-        echo "Installation aborted by user due to non-empty $MOUNTPOINT."
-        exit 1
-    fi
-fi
-
-# Step 5: Generate fstab
+# Step 4: Generate fstab
 echo
 echo "=================================================="
-echo "=== Step 5: Generate fstab ==="
+echo "=== Step 4: Generate fstab ==="
 echo "=================================================="
 echo
 if [ ! -f "$MOUNTPOINT/etc/fstab" ] || ! grep -q "${DISK}2" "$MOUNTPOINT/etc/fstab"; then
@@ -167,10 +146,10 @@ else
     echo "fstab already exists, skipping"
 fi
 
-# Step 6: Chroot configuration
+# Step 5: Chroot configuration
 echo
 echo "=================================================="
-echo "=== Step 6: Chroot configuration (packages, user, GUI) ==="
+echo "=== Step 5: Chroot configuration (packages, user, GUI) ==="
 echo "=================================================="
 echo
 arch-chroot "$MOUNTPOINT" bash <<'EOF'
@@ -218,10 +197,10 @@ if systemd-detect-virt | grep -iq virtualbox; then
 fi
 EOF
 
-# Optional: create user if not exists
+# Step 6: Optional create user
 echo
 echo "=================================================="
-echo "=== Step 7: Create user ==="
+echo "=== Step 6: Create user ==="
 echo "=================================================="
 echo
 read -rp "Enter new username (leave empty to skip): " USERNAME
@@ -237,10 +216,10 @@ if [ -n "$USERNAME" ]; then
     fi
 fi
 
-# Optional: install XFCE GUI
+# Step 7: Optional install XFCE GUI
 echo
 echo "=================================================="
-echo "=== Step 8: Install XFCE GUI (optional) ==="
+echo "=== Step 7: Install XFCE GUI (optional) ==="
 echo "=================================================="
 echo
 read -rp "Install XFCE + LightDM? (y/N): " GUI
@@ -249,6 +228,7 @@ if [[ "$GUI" =~ ^[Yy]$ ]]; then
     arch-chroot "$MOUNTPOINT" systemctl enable lightdm.service
 fi
 
+# Step 8: Installation complete
 echo
 echo "=================================================="
 echo "=== Arch Linux installation complete! Reboot to use your persistent system ==="
