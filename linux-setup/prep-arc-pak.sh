@@ -9,8 +9,10 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Папка для локального хранилища пакетов
-LOCAL_REPO="./arc-repo"
+LOCAL_REPO="/var/local/arc-repo"
 mkdir -p "$LOCAL_REPO"
+chown root:root "$LOCAL_REPO"
+chmod 755 "$LOCAL_REPO"
 
 echo
 echo "=================================================="
@@ -23,7 +25,7 @@ echo "=================================================="
 echo "=== Step 2: Packages list to download ==="
 echo "=================================================="
 
-# Базовые пакеты из твоего скрипта
+# Базовые пакеты
 PACKAGES=(
     base
     linux
@@ -49,25 +51,22 @@ echo "=== Step 3: Downloading packages ==="
 echo "=================================================="
 
 # Скачиваем пакеты без установки
-for pkg in "${PACKAGES[@]}"; do
-    echo "Downloading $pkg..."
-    pacman -Sw --cachedir "$LOCAL_REPO" --noconfirm "$pkg"
-done
+pacman -Sw --cachedir "$LOCAL_REPO" --noconfirm "${PACKAGES[@]}"
 
 echo
 echo "=================================================="
-echo "=== Step 4: Optional - create local repo database ==="
+echo "=== Step 4: Create local repo database ==="
 echo "=================================================="
 
 # Создаем локальный репозиторий
+rm -f "$LOCAL_REPO/local.db"* "$LOCAL_REPO/local.files"*
 repo-add "$LOCAL_REPO/local.db.tar.gz" "$LOCAL_REPO"/*.pkg.tar.zst
 
 echo
 echo "=================================================="
 echo "=== Done! Local package repository created at $LOCAL_REPO ==="
-echo "You can use it in your offline installation by adding:"
+echo "Add this to /etc/pacman.conf:"
 echo "[local]"
-echo "SigLevel = Optional TrustedOnly"
+echo "SigLevel = Optional TrustAll"
 echo "Server = file://$LOCAL_REPO"
-echo "to /etc/pacman.conf"
 echo "=================================================="
