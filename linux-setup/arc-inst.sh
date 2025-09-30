@@ -164,17 +164,33 @@ echo "=== Step 8: Chroot configuration (packages, user, GUI) ==="
 echo "=================================================="
 echo
 
-# Базовые пакеты для минимальной системы, чтобы chroot работал
+# Список пакетов для минимальной системы
+PACKAGES=("base" "linux" "linux-firmware" "vim")
+
+TOTAL=${#PACKAGES[@]}
+COUNT=0
+
+# Если указано локальное хранилище
 if [ -n "$PACMAN_OPTS" ]; then
-    pacman -U $PACMAN_OPTS || {
-        echo "Error: pacman failed!"
-        exit 1
-    }
+    echo "Installing packages from local storage..."
+    for PKG_FILE in "$LOCAL_STORAGE"/*.pkg.tar.zst; do
+        ((COUNT++))
+        echo "[$COUNT/$TOTAL] Installing $(basename "$PKG_FILE")..."
+        pacman -U --noconfirm "$PKG_FILE" || {
+            echo "Error installing $PKG_FILE"
+            exit 1
+        }
+    done
 else
-    pacstrap "$MOUNTPOINT" base linux linux-firmware vim || {
-        echo "Error: pacstrap failed!"
-        exit 1
-    }
+    echo "Installing packages from Arch repositories..."
+    for PKG in "${PACKAGES[@]}"; do
+        ((COUNT++))
+        echo "[$COUNT/$TOTAL] Installing $PKG..."
+        pacstrap "$MOUNTPOINT" "$PKG" || {
+            echo "Error installing $PKG"
+            exit 1
+        }
+    done
 fi
 
 # Монтирование необходимых системных каталогов для chroot
