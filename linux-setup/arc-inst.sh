@@ -11,7 +11,7 @@ fi
 
 echo
 echo "=================================================="
-echo "=== LOG FILE SETUP ==="
+echo "=== Step 1: LOG FILE SETUP ==="
 echo "=================================================="
 echo
 
@@ -27,7 +27,7 @@ exec > >(tee -a "$LOGFILE") 2>&1
 
 echo
 echo "=================================================="
-echo "=== CHECK IF /MNT IS EMPTY ==="
+echo "=== Step 2: CHECK IF /MNT IS EMPTY ==="
 echo "=================================================="
 echo
 
@@ -57,14 +57,14 @@ fi
 
 echo
 echo "=================================================="
-echo "=== Step 0: Start Arch Linux installer ==="
+echo "=== Step 3: Start Arch Linux installer ==="
 echo "=================================================="
 echo
 
 # Step 1: показать диски
 echo
 echo "=================================================="
-echo "=== Step 1: Show available disks ==="
+echo "=== Step 4: Show available disks ==="
 echo "=================================================="
 echo
 DISKS=($(lsblk -dno NAME,SIZE))
@@ -99,7 +99,7 @@ fi
 # Step 2: Partition & Format Disk
 echo
 echo "=================================================="
-echo "=== Step 2: Partition & Format Disk ==="
+echo "=== Step 5: Partition & Format Disk ==="
 echo "=================================================="
 echo
 if ! blkid "${DISK}2" >/dev/null 2>&1; then
@@ -129,7 +129,7 @@ fi
 # Step 3: Mount partitions
 echo
 echo "=================================================="
-echo "=== Step 3: Mount partitions ==="
+echo "=== Step 6: Mount partitions ==="
 echo "=================================================="
 echo
 mount --mkdir "${DISK}2" "$MOUNTPOINT"
@@ -157,7 +157,7 @@ fi
 # Step 5: Generate fstab
 echo
 echo "=================================================="
-echo "=== Step 5: Generate fstab ==="
+echo "=== Step 7: Generate fstab ==="
 echo "=================================================="
 echo
 if [ ! -f "$MOUNTPOINT/etc/fstab" ] || ! grep -q "${DISK}2" "$MOUNTPOINT/etc/fstab"; then
@@ -170,7 +170,7 @@ fi
 # Step 6: Chroot configuration
 echo
 echo "=================================================="
-echo "=== Step 6: Chroot configuration (packages, user, GUI) ==="
+echo "=== Step 8: Chroot configuration (packages, user, GUI) ==="
 echo "=================================================="
 echo
 arch-chroot "$MOUNTPOINT" bash <<'EOF'
@@ -221,7 +221,7 @@ EOF
 # Optional: create user if not exists
 echo
 echo "=================================================="
-echo "=== Step 7: Create user ==="
+echo "=== Step 9: Create user ==="
 echo "=================================================="
 echo
 read -rp "Enter new username (leave empty to skip): " USERNAME
@@ -240,7 +240,7 @@ fi
 # Optional: install XFCE GUI
 echo
 echo "=================================================="
-echo "=== Step 8: Install XFCE GUI (optional) ==="
+echo "=== Step 10: Install XFCE GUI (optional) ==="
 echo "=================================================="
 echo
 read -rp "Install XFCE + LightDM? (y/N): " GUI
