@@ -16,6 +16,16 @@ exec > >(tee -a "$LOGFILE") 2>&1
 
 MOUNTPOINT="/mnt"
 
+# Проверка, что MOUNTPOINT пустой
+if [ -n "$(ls -A $MOUNTPOINT 2>/dev/null)" ]; then
+    echo
+    echo "=================================================="
+    echo "ERROR: $MOUNTPOINT is not empty! Previous installation data may exist."
+    echo "Please clean or unmount this partition before proceeding."
+    echo "=================================================="
+    exit 1
+fi
+
 echo
 echo "=================================================="
 echo "=== Step 0: Start Arch Linux installer ==="
