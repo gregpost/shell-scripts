@@ -9,10 +9,12 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-##################################################
-#              LOG FILE SETUP                    #
-#  Очистка предыдущих логов и перенаправление    #
-##################################################
+echo
+echo "=================================================="
+echo "=== LOG FILE SETUP ==="
+echo "=================================================="
+echo
+
 LOGFILE="/shared/log.txt"
 mkdir -p "$(dirname "$LOGFILE")"
 
@@ -23,16 +25,34 @@ mkdir -p "$(dirname "$LOGFILE")"
 exec > >(tee -a "$LOGFILE") 2>&1
 ##################################################
 
+echo
+echo "=================================================="
+echo "=== CHECK IF /MNT IS EMPTY ==="
+echo "=================================================="
+echo
+
 MOUNTPOINT="/mnt"
 
-# Проверка, что MOUNTPOINT пустой
-if [ -n "$(ls -A $MOUNTPOINT 2>/dev/null)" ]; then
+# Проверяем, есть ли что-то смонтированное или файлы в /mnt
+if mountpoint -q "$MOUNTPOINT" || [ "$(ls -A "$MOUNTPOINT" 2>/dev/null)" ]; then
     echo
     echo "=================================================="
-    echo "ERROR: $MOUNTPOINT is not empty! Previous installation data may exist."
-    echo "Please clean or unmount this partition before proceeding."
+    echo "WARNING: $MOUNTPOINT is not empty! Previous installation data may exist."
+    echo "You can clean or unmount this partition before proceeding."
     echo "=================================================="
-    exit 1
+    read -rp "Do you want to unmount and clean $MOUNTPOINT? (yes/no): " CLEANMNT
+    if [[ "$CLEANMNT" == "yes" ]]; then
+        echo "Unmounting all mounts under $MOUNTPOINT..."
+        # Рекурсивно размонтируем все, игнорируя ошибки
+        umount -Rl "$MOUNTPOINT" || echo "Warning: Some mounts could not be unmounted."
+        # Очищаем содержимое
+        rm -rf "${MOUNTPOINT:?}/"*
+        echo "$MOUNTPOINT is now clean and ready for installation."
+        mkdir -p "$MOUNTPOINT"
+    else
+        echo "Installation aborted. Please manually clean or unmount $MOUNTPOINT."
+        exit 1
+    fi
 fi
 
 echo
