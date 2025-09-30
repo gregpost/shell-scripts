@@ -27,12 +27,15 @@ exec > >(tee -a "$LOGFILE") 2>&1
 
 echo
 echo "=================================================="
-echo "=== Step 2: Local package storage ==="
+echo "=== Step 2: Optional: Create local repo? ==="
 echo "=================================================="
-echo
-read -rp "Do you have a local package storage? Enter path or type 'no': " LOCAL_STORAGE
-if [[ "$LOCAL_STORAGE" != "no" && -d "$LOCAL_STORAGE" ]]; then
-    echo "Local storage set to: $LOCAL_STORAGE"
+read -rp "Do you want to create local package repository for offline install? (y/N): " CREATE_REPO
+if [[ "$CREATE_REPO" =~ ^[Yy]$ ]]; then
+    read -rp "Enter folder for local package repository (default /shared/arc-repo): " REPO_PATH
+    REPO_PATH="${REPO_PATH:-/shared/arc-repo}"
+    # запускаем prep-arc-pak.sh с указанной папкой
+    LOCAL_REPO="$REPO_PATH" bash prep-arc-pak.sh
+    LOCAL_STORAGE="$REPO_PATH"
     PACMAN_OPTS="-U $LOCAL_STORAGE/*.pkg.tar.zst --noconfirm"
 else
     echo "No local storage will be used. Packages will be downloaded from the internet."
@@ -166,7 +169,6 @@ echo
 
 # Список пакетов для минимальной системы
 PACKAGES=("base" "linux" "linux-firmware" "vim")
-
 TOTAL=${#PACKAGES[@]}
 COUNT=0
 
@@ -282,4 +284,3 @@ echo "=================================================="
 echo "=== Arch Linux installation complete! Reboot to use your persistent system ==="
 echo "=================================================="
 echo
-

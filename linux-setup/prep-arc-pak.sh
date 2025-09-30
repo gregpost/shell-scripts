@@ -8,12 +8,14 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Папка для локального хранилища (если переменная не задана, спрашиваем у пользователя)
+# Проверка переменной LOCAL_REPO
 if [ -z "$LOCAL_REPO" ]; then
-    read -rp "Enter folder for local package repository (default /shared/arc-repo): " LOCAL_REPO
-    LOCAL_REPO="${LOCAL_REPO:-/shared/arc-repo}"
+    echo "Ошибка: LOCAL_REPO не задан. Укажите путь при запуске скрипта."
+    echo "Пример: LOCAL_REPO=/shared/arc-repo bash prep-arc-pak.sh"
+    exit 1
 fi
 
+# Папка для локального хранилища пакетов
 mkdir -p "$LOCAL_REPO"
 chown root:root "$LOCAL_REPO"
 chmod 755 "$LOCAL_REPO"
@@ -29,7 +31,6 @@ echo "=================================================="
 echo "=== Step 2: Packages list to download ==="
 echo "=================================================="
 
-# Базовые пакеты
 PACKAGES=(
     base
     linux
@@ -69,7 +70,7 @@ repo-add "$LOCAL_REPO/local.db.tar.gz" "$LOCAL_REPO"/*.pkg.tar.zst
 echo
 echo "=================================================="
 echo "=== Done! Local package repository created at $LOCAL_REPO ==="
-echo "Add this to /etc/pacman.conf if needed:"
+echo "Add this to /etc/pacman.conf:"
 echo "[local]"
 echo "SigLevel = Optional TrustAll"
 echo "Server = file://$LOCAL_REPO"
