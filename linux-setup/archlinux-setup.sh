@@ -81,7 +81,7 @@ mount --mkdir "${DISK}1" "$MOUNTPOINT/boot"
 echo "=== Step 4: Install base system if not installed ==="
 if [ ! -f "$MOUNTPOINT/etc/arch-release" ]; then
     echo "Installing base system..."
-    pacstrap -K "$MOUNTPOINT" base linux linux-firmware mkinitcpio
+    pacstrap -K "$MOUNTPOINT" base linux linux-firmware mkinitcpio --noconfirm
 else
     echo "Base system already installed, skipping pacstrap"
 fi
@@ -130,7 +130,7 @@ pacman -S --needed --noconfirm iptables mc nano
 
 # Bootloader
 if [ ! -d /boot/grub ]; then
-    pacman -S --noconfirm grub efibootmgr
+    pacman -S --needed --noconfirm grub efibootmgr
     grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
     grub-mkconfig -o /boot/grub/grub.cfg
 fi
