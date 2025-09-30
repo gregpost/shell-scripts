@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # Arch Linux safe installer with partition number selection, confirmation, logging, and optional GUI
 set -e
 
@@ -125,9 +125,8 @@ if ! grep -q root /etc/shadow; then
     passwd
 fi
 
-# Network + utilities (mc, nano)
-pacman -S --needed --noconfirm networkmanager iptables mc nano
-systemctl enable NetworkManager
+# Utilities installation
+pacman -S --needed --noconfirm iptables mc nano
 
 # Bootloader
 if [ ! -d /boot/grub ]; then
