@@ -9,21 +9,50 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Логирование: дублируем весь вывод в файл
+echo
+echo "=================================================="
+echo "=== LOG FILE SETUP ==="
+echo "=================================================="
+echo
+
 LOGFILE="/shared/log.txt"
 mkdir -p "$(dirname "$LOGFILE")"
+
+# Очистка предыдущего лога перед запуском скрипта
+> "$LOGFILE"
+
+# Перенаправление всего вывода в лог и на экран
 exec > >(tee -a "$LOGFILE") 2>&1
+##################################################
+
+echo
+echo "=================================================="
+echo "=== CHECK IF /MNT IS EMPTY ==="
+echo "=================================================="
+echo
 
 MOUNTPOINT="/mnt"
 
-# Проверка, что MOUNTPOINT пустой
-if [ -n "$(ls -A $MOUNTPOINT 2>/dev/null)" ]; then
+# Проверяем, есть ли что-то смонтированное или файлы в /mnt
+if mountpoint -q "$MOUNTPOINT" || [ "$(ls -A "$MOUNTPOINT" 2>/dev/null)" ]; then
     echo
     echo "=================================================="
-    echo "ERROR: $MOUNTPOINT is not empty! Previous installation data may exist."
-    echo "Please clean or unmount this partition before proceeding."
+    echo "WARNING: $MOUNTPOINT is not empty! Previous installation data may exist."
+    echo "You can clean or unmount this partition before proceeding."
     echo "=================================================="
-    exit 1
+    read -rp "Do you want to unmount and clean $MOUNTPOINT? (yes/no): " CLEANMNT
+    if [[ "$CLEANMNT" == "yes" ]]; then
+        echo "Unmounting all mounts under $MOUNTPOINT..."
+        # Рекурсивно размонтируем все, игнорируя ошибки
+        umount -Rl "$MOUNTPOINT" || echo "Warning: Some mounts could not be unmounted."
+        # Очищаем содержимое
+        rm -rf "${MOUNTPOINT:?}/"*
+        echo "$MOUNTPOINT is now clean and ready for installation."
+        mkdir -p "$MOUNTPOINT"
+    else
+        echo "Installation aborted. Please manually clean or unmount $MOUNTPOINT."
+        exit 1
+    fi
 fi
 
 echo
@@ -106,17 +135,23 @@ echo
 mount --mkdir "${DISK}2" "$MOUNTPOINT"
 mount --mkdir "${DISK}1" "$MOUNTPOINT/boot"
 
-# Step 4: Install base system
-echo
-echo "=================================================="
-echo "=== Step 4: Install base system if not installed ==="
-echo "=================================================="
-echo
-if [ ! -f "$MOUNTPOINT/etc/arch-release" ]; then
-    echo "Installing base system..."
-    pacstrap -K --noconfirm "$MOUNTPOINT" base linux linux-firmware mkinitcpio
-else
-    echo "Base system already installed, skipping pacstrap"
+# Step 4 check: Ensure /mnt is empty
+if [ "$(ls -A "$MOUNTPOINT")" ]; then
+    echo
+    echo "=================================================="
+    echo "WARNING: $MOUNTPOINT is not empty. Previous installation data may exist."
+    echo "=================================================="
+    read -rp "Do you want to unmount everything under $MOUNTPOINT and continue? (yes/no): " UNMOUNT_CONFIRM
+    if [[ "$UNMOUNT_CONFIRM" == "yes" ]]; then
+        echo "Unmounting all mounts under $MOUNTPOINT..."
+        # Рекурсивно размонтируем все, игнорируя ошибки
+        umount -Rl "$MOUNTPOINT" || echo "Warning: Some mounts could not be unmounted."
+        echo "$MOUNTPOINT is now unmounted and ready for installation."
+        mkdir -p "$MOUNTPOINT"
+    else
+        echo "Installation aborted by user due to non-empty $MOUNTPOINT."
+        exit 1
+    fi
 fi
 
 # Step 5: Generate fstab
