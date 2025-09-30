@@ -1,77 +1,35 @@
-#!/usr/bin/env bash
-# Arch Linux: Create local package cache for offline installation
+#!/bin/bash
+# Save all installed Arch packages to a local repository
+# Run as root
+
 set -e
 
-# Проверка root
-if [ "$EUID" -ne 0 ]; then
-    echo "Ошибка: скрипт нужно запускать от root!"
-    exit 1
-fi
+echo "Enter the path to save the local repository (will be created if not exists):"
+read -r REPO_PATH
 
-# Проверка переменной LOCAL_REPO
-if [ -z "$LOCAL_REPO" ]; then
-    echo "Ошибка: LOCAL_REPO не задан. Укажите путь при запуске скрипта."
-    echo "Пример: LOCAL_REPO=/shared/arc-repo bash prep-arc-pak.sh"
-    exit 1
-fi
+# Create directory
+mkdir -p "$REPO_PATH"
 
-# Папка для локального хранилища пакетов
-mkdir -p "$LOCAL_REPO"
-chown root:root "$LOCAL_REPO"
-chmod 755 "$LOCAL_REPO"
+echo "Saving all installed packages to $REPO_PATH..."
+# Download all installed packages from pacman cache (or re-download if missing)
+pacman -Qq > /tmp/installed_packages.txt
+for pkg in $(cat /tmp/installed_packages.txt); do
+    echo "Processing package: $pkg"
+    # Check if package exists in cache
+    CACHE_FILE=$(find /var/cache/pacman/pkg -name "${pkg}-*.pkg.tar.zst" | head -n1)
+    if [[ -f "$CACHE_FILE" ]]; then
+        cp "$CACHE_FILE" "$REPO_PATH/"
+    else
+        # Download package if not in cache
+        pacman -Sw --cachedir "$REPO_PATH" --noconfirm "$pkg"
+    fi
+done
 
-echo
-echo "=================================================="
-echo "=== Step 1: Updating package database ==="
-echo "=================================================="
-pacman -Sy --noconfirm
+echo "Creating local repository database..."
+repo-add "$REPO_PATH/local.db.tar.gz" "$REPO_PATH/"*.pkg.tar.zst
 
-echo
-echo "=================================================="
-echo "=== Step 2: Packages list to download ==="
-echo "=================================================="
-
-PACKAGES=(
-    base
-    linux
-    linux-firmware
-    vim
-    grub
-    efibootmgr
-    virtualbox-guest-utils
-    xorg-server
-    xorg-xinit
-    xfce4
-    xfce4-terminal
-    lightdm
-    lightdm-gtk-greeter
-)
-
-echo "Packages to download:"
-printf " - %s\n" "${PACKAGES[@]}"
-
-echo
-echo "=================================================="
-echo "=== Step 3: Downloading packages ==="
-echo "=================================================="
-
-# Скачиваем пакеты без установки
-pacman -Sw --cachedir "$LOCAL_REPO" --noconfirm "${PACKAGES[@]}"
-
-echo
-echo "=================================================="
-echo "=== Step 4: Create local repo database ==="
-echo "=================================================="
-
-# Создаем локальный репозиторий
-rm -f "$LOCAL_REPO/local.db"* "$LOCAL_REPO/local.files"*
-repo-add "$LOCAL_REPO/local.db.tar.gz" "$LOCAL_REPO"/*.pkg.tar.zst
-
-echo
-echo "=================================================="
-echo "=== Done! Local package repository created at $LOCAL_REPO ==="
-echo "Add this to /etc/pacman.conf:"
+echo "Local repository created at $REPO_PATH"
+echo "To use it in future installation, add the following to /etc/pacman.conf:"
 echo "[local]"
 echo "SigLevel = Optional TrustAll"
-echo "Server = file://$LOCAL_REPO"
-echo "=================================================="
+echo "Server = file://$REPO_PATH"

@@ -1,0 +1,78 @@
+{
+  "app_config": {},
+  "archinstall-language": "English",
+  "auth_config": {},
+  "bootloader": "Grub",
+  "custom_commands": [
+    {
+      "command": "echo 'xrandr --output Virtual-1 --mode 1920x1200' >> /home/user1/.xprofile && chown user1:user1 /home/user1/.xprofile"
+    }
+  ],
+  "disk_config": {
+    "btrfs_options": {
+      "snapshot_config": null
+    },
+    "config_type": "default_layout",
+    "device_modifications": [
+      {
+        "device": "/dev/sda",
+        "partitions": [
+          {
+            "btrfs": [],
+            "dev_path": null,
+            "flags": ["boot"],
+            "fs_type": "fat32",
+            "mount_options": [],
+            "mountpoint": "/boot",
+            "obj_id": "19a2b092-48d0-459b-8546-d623943f2160",
+            "size": {"sector_size": {"unit": "B","value": 512},"unit": "GiB","value": 1},
+            "start": {"sector_size": {"unit": "B","value": 512},"unit": "MiB","value": 1},
+            "status": "create",
+            "type": "primary"
+          },
+          {
+            "btrfs": [],
+            "dev_path": null,
+            "flags": [],
+            "fs_type": "ext4",
+            "mount_options": [],
+            "mountpoint": "/",
+            "obj_id": "02a162a1-bb66-4ed4-bd0f-ede1ec9af775",
+            "size": {"sector_size": {"unit": "B","value": 512},"unit": "B","value": 52612300800},
+            "start": {"sector_size": {"unit": "B","value": 512},"unit": "B","value": 1074790400},
+            "status": "create",
+            "type": "primary"
+          }
+        ],
+        "wipe": true
+      }
+    ]
+  },
+  "hostname": "archlinux",
+  "kernels": ["linux"],
+  "locale_config": {
+    "kb_layout": "us",
+    "sys_enc": "UTF-8",
+    "sys_lang": "en_US.UTF-8"
+  },
+  "network_config": {"type": "iso"},
+  "ntp": true,
+  "packages": [
+    "base",
+    "linux-firmware",
+    "vim",
+    "xfce4",
+    "lightdm",
+    "lightdm-gtk-greeter",
+    "xfce4-terminal",
+    "virtualbox-guest-utils",
+    "kate",
+    "mc"
+  ],
+  "parallel_downloads": 0,
+  "script": null,
+  "services": ["lightdm", "vboxservice"],
+  "swap": true,
+  "timezone": "UTC",
+  "version": "3.0.11"
+}

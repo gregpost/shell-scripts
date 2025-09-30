@@ -188,7 +188,7 @@ else
     for PKG in "${PACKAGES[@]}"; do
         ((COUNT++))
         echo "[$COUNT/$TOTAL] Installing $PKG..."
-        pacstrap "$MOUNTPOINT" "$PKG" || {
+        pacstrap -K "$MOUNTPOINT" --noconfirm "$PKG" || {
             echo "Error installing $PKG"
             exit 1
         }
