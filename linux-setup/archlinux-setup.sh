@@ -1,35 +1,35 @@
 #!/usr/bin/env bash
-# Arch Linux safe installer with partition number selection and confirmation
+# Arch Linux safe installer with numbered disk selection and confirmation
 set -e
 
 MOUNTPOINT="/mnt"
 
 echo "=== Step 1: Show available disks ==="
-lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL
+DISKS=($(lsblk -dpno NAME,SIZE | grep -E "/dev/sd|/dev/vd|/dev/nvme"))
+i=1
+for d in "${DISKS[@]}"; do
+    echo "$i) $d"
+    ((i++))
+done
 
-# Выбор диска
-read -rp "Enter the disk number to install (e.g., 0 for /dev/sda): " DISKNUM
-DISK="/dev/sd${DISKNUM}"
-
-# Проверяем существование
-if [ ! -b "$DISK" ]; then
-    echo "Error: Disk $DISK not found"
+# Выбор диска по номеру
+read -rp "Enter the disk number to install (1-${#DISKS[@]}): " DISKNUM
+if ! [[ "$DISKNUM" =~ ^[0-9]+$ ]] || [ "$DISKNUM" -lt 1 ] || [ "$DISKNUM" -gt "${#DISKS[@]}" ]; then
+    echo "Error: Invalid selection"
     exit 1
 fi
 
-# Показываем выбранный диск и информацию о нём
+DISK=$(echo "${DISKS[$((DISKNUM-1))]}" | awk '{print $1}')
 echo "You selected disk: $DISK"
-lsblk "$DISK" -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL
 
 # Подтверждение
-read -rp "Are you sure you want to use this disk? All data on it may be lost! (yes/no): " CONFIRM
+read -rp "Are you sure you want to use $DISK ? All data on it may be lost! (yes/no): " CONFIRM
 if [[ "$CONFIRM" != "yes" ]]; then
     echo "Installation aborted by user."
     exit 0
 fi
 
 echo "=== Step 2: Partition & Format Disk ==="
-# Partitioning (GPT + EFI + root) if not exists
 if ! blkid "${DISK}2" >/dev/null 2>&1; then
     echo "Creating GPT and partitions..."
     parted --script "$DISK" mklabel gpt
@@ -106,9 +106,8 @@ if ! grep -q root /etc/shadow; then
     passwd
 fi
 
-# Network + utilities (mc, nano)
+# Network + utilities
 pacman -S --needed --noconfirm networkmanager iptables mc nano
-
 systemctl enable NetworkManager
 
 # Bootloader
@@ -118,7 +117,7 @@ if [ ! -d /boot/grub ]; then
     grub-mkconfig -o /boot/grub/grub.cfg
 fi
 
-# VirtualBox detection and Guest Additions
+# VirtualBox Guest Additions
 if systemd-detect-virt | grep -iq virtualbox; then
     echo "Detected VirtualBox, installing guest-utils..."
     pacman -S --needed --noconfirm virtualbox-guest-utils
@@ -126,7 +125,7 @@ if systemd-detect-virt | grep -iq virtualbox; then
 fi
 EOF
 
-# Optional: create user if not exists
+# Optional: user creation
 read -rp "Enter new username (leave empty to skip): " USERNAME
 if [ -n "$USERNAME" ]; then
     if ! arch-chroot "$MOUNTPOINT" id "$USERNAME" >/dev/null 2>&1; then
@@ -139,7 +138,7 @@ if [ -n "$USERNAME" ]; then
     fi
 fi
 
-# Optional: install XFCE GUI
+# Optional: XFCE GUI
 read -rp "Install XFCE + LightDM? (y/N): " GUI
 if [[ "$GUI" =~ ^[Yy]$ ]]; then
     arch-chroot "$MOUNTPOINT" pacman -S --needed --noconfirm xorg-server xorg-xinit xfce4 xfce4-terminal lightdm lightdm-gtk-greeter
