@@ -8,8 +8,12 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Папка для локального хранилища пакетов
-LOCAL_REPO="/var/local/arc-repo"
+# Папка для локального хранилища (если переменная не задана, спрашиваем у пользователя)
+if [ -z "$LOCAL_REPO" ]; then
+    read -rp "Enter folder for local package repository (default /shared/arc-repo): " LOCAL_REPO
+    LOCAL_REPO="${LOCAL_REPO:-/shared/arc-repo}"
+fi
+
 mkdir -p "$LOCAL_REPO"
 chown root:root "$LOCAL_REPO"
 chmod 755 "$LOCAL_REPO"
@@ -65,7 +69,7 @@ repo-add "$LOCAL_REPO/local.db.tar.gz" "$LOCAL_REPO"/*.pkg.tar.zst
 echo
 echo "=================================================="
 echo "=== Done! Local package repository created at $LOCAL_REPO ==="
-echo "Add this to /etc/pacman.conf:"
+echo "Add this to /etc/pacman.conf if needed:"
 echo "[local]"
 echo "SigLevel = Optional TrustAll"
 echo "Server = file://$LOCAL_REPO"
