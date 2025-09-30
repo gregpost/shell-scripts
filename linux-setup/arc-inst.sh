@@ -27,7 +27,21 @@ exec > >(tee -a "$LOGFILE") 2>&1
 
 echo
 echo "=================================================="
-echo "=== Step 2: CHECK IF /MNT IS EMPTY ==="
+echo "=== Step 2: Local package storage ==="
+echo "=================================================="
+echo
+read -rp "Do you have a local package storage? Enter path or type 'no': " LOCAL_STORAGE
+if [[ "$LOCAL_STORAGE" != "no" && -d "$LOCAL_STORAGE" ]]; then
+    echo "Local storage set to: $LOCAL_STORAGE"
+    PACMAN_OPTS="-U $LOCAL_STORAGE/*.pkg.tar.zst --noconfirm"
+else
+    echo "No local storage will be used. Packages will be downloaded from the internet."
+    PACMAN_OPTS=""
+fi
+
+echo
+echo "=================================================="
+echo "=== Step 3: CHECK IF /MNT IS EMPTY ==="
 echo "=================================================="
 echo
 
@@ -52,12 +66,6 @@ if mountpoint -q "$MOUNTPOINT" || [ "$(ls -A "$MOUNTPOINT" 2>/dev/null)" ]; then
         exit 1
     fi
 fi
-
-echo
-echo "=================================================="
-echo "=== Step 3: Start Arch Linux installer ==="
-echo "=================================================="
-echo
 
 echo
 echo "=================================================="
@@ -157,10 +165,17 @@ echo "=================================================="
 echo
 
 # Базовые пакеты для минимальной системы, чтобы chroot работал
-pacstrap "$MOUNTPOINT" base linux linux-firmware vim || {
-    echo "Error: pacstrap failed!"
-    exit 1
-}
+if [ -n "$PACMAN_OPTS" ]; then
+    pacman -U $PACMAN_OPTS || {
+        echo "Error: pacman failed!"
+        exit 1
+    }
+else
+    pacstrap "$MOUNTPOINT" base linux linux-firmware vim || {
+        echo "Error: pacstrap failed!"
+        exit 1
+    }
+fi
 
 # Монтирование необходимых системных каталогов для chroot
 mount --mkdir --types proc /proc "$MOUNTPOINT/proc"
@@ -251,3 +266,4 @@ echo "=================================================="
 echo "=== Arch Linux installation complete! Reboot to use your persistent system ==="
 echo "=================================================="
 echo
+
