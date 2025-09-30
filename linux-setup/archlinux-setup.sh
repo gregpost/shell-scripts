@@ -16,10 +16,18 @@ exec > >(tee -a "$LOGFILE") 2>&1
 
 MOUNTPOINT="/mnt"
 
+echo
+echo "=================================================="
 echo "=== Step 0: Start Arch Linux installer ==="
+echo "=================================================="
+echo
 
 # Step 1: показать диски
+echo
+echo "=================================================="
 echo "=== Step 1: Show available disks ==="
+echo "=================================================="
+echo
 DISKS=($(lsblk -dno NAME,SIZE))
 i=1
 for ((j=0; j<${#DISKS[@]}; j+=2)); do
@@ -39,16 +47,22 @@ if [ $INDEX -lt 0 ] || [ $INDEX -ge ${#DISKS[@]} ]; then
 fi
 
 DISK="/dev/${DISKS[$INDEX]}"
+echo
 echo "You selected disk: $DISK"
 lsblk "$DISK" -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL
-
+echo
 read -rp "Are you sure you want to use this disk? All data on it may be lost! (yes/no): " CONFIRM
 if [[ "$CONFIRM" != "yes" ]]; then
     echo "Installation aborted by user."
     exit 0
 fi
 
+# Step 2: Partition & Format Disk
+echo
+echo "=================================================="
 echo "=== Step 2: Partition & Format Disk ==="
+echo "=================================================="
+echo
 if ! blkid "${DISK}2" >/dev/null 2>&1; then
     echo "Creating GPT and partitions..."
     parted --script "$DISK" mklabel gpt
@@ -59,7 +73,6 @@ else
     echo "Partitions already exist, skipping partitioning"
 fi
 
-# Форматирование только если не смонтировано
 if ! mount | grep -q "${DISK}1"; then
     echo "Formatting EFI partition..."
     mkfs.fat -F32 -n EFI "${DISK}1"
@@ -74,19 +87,34 @@ else
     echo "ROOT partition already mounted, skipping formatting"
 fi
 
+# Step 3: Mount partitions
+echo
+echo "=================================================="
 echo "=== Step 3: Mount partitions ==="
+echo "=================================================="
+echo
 mount --mkdir "${DISK}2" "$MOUNTPOINT"
 mount --mkdir "${DISK}1" "$MOUNTPOINT/boot"
 
+# Step 4: Install base system
+echo
+echo "=================================================="
 echo "=== Step 4: Install base system if not installed ==="
+echo "=================================================="
+echo
 if [ ! -f "$MOUNTPOINT/etc/arch-release" ]; then
     echo "Installing base system..."
-    pacstrap -K "$MOUNTPOINT" base linux linux-firmware mkinitcpio --noconfirm
+    pacstrap -K "$MOUNTPOINT" base linux linux-firmware mkinitcpio
 else
     echo "Base system already installed, skipping pacstrap"
 fi
 
+# Step 5: Generate fstab
+echo
+echo "=================================================="
 echo "=== Step 5: Generate fstab ==="
+echo "=================================================="
+echo
 if [ ! -f "$MOUNTPOINT/etc/fstab" ] || ! grep -q "${DISK}2" "$MOUNTPOINT/etc/fstab"; then
     genfstab -U "$MOUNTPOINT" >> "$MOUNTPOINT/etc/fstab"
     echo "fstab generated"
@@ -94,21 +122,24 @@ else
     echo "fstab already exists, skipping"
 fi
 
+# Step 6: Chroot configuration
+echo
+echo "=================================================="
 echo "=== Step 6: Chroot configuration (packages, user, GUI) ==="
+echo "=================================================="
+echo
 arch-chroot "$MOUNTPOINT" bash <<'EOF'
 set -e
 
-# Timezone
+echo
+echo "---- Configuring timezone, locale, hostname ----"
 ln -sf /usr/share/zoneinfo/Europe/Moscow /etc/localtime
 hwclock --systohc
-
-# Locale
 sed -i 's/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
 locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 echo "KEYMAP=us" > /etc/vconsole.conf
 
-# Hostname
 HOSTNAME="arch-vm"
 echo "$HOSTNAME" > /etc/hostname
 if ! grep -q "$HOSTNAME" /etc/hosts; then
@@ -119,31 +150,35 @@ cat <<EOT > /etc/hosts
 EOT
 fi
 
-# Root password (ask only if empty)
+echo
+echo "---- Setting root password ----"
 if ! grep -q root /etc/shadow; then
     echo "Set root password:"
     passwd
 fi
 
-# Utilities installation
-pacman -S --needed --noconfirm iptables mc nano
-
-# Bootloader
+echo
+echo "---- Installing bootloader ----"
 if [ ! -d /boot/grub ]; then
     pacman -S --needed --noconfirm grub efibootmgr
     grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
     grub-mkconfig -o /boot/grub/grub.cfg
 fi
 
-# VirtualBox detection and Guest Additions
+echo
+echo "---- Installing VirtualBox guest utilities ----"
 if systemd-detect-virt | grep -iq virtualbox; then
-    echo "Detected VirtualBox, installing guest-utils..."
     pacman -S --needed --noconfirm virtualbox-guest-utils
     systemctl enable vboxservice
 fi
 EOF
 
 # Optional: create user if not exists
+echo
+echo "=================================================="
+echo "=== Step 7: Create user ==="
+echo "=================================================="
+echo
 read -rp "Enter new username (leave empty to skip): " USERNAME
 if [ -n "$USERNAME" ]; then
     if ! arch-chroot "$MOUNTPOINT" id "$USERNAME" >/dev/null 2>&1; then
@@ -158,10 +193,19 @@ if [ -n "$USERNAME" ]; then
 fi
 
 # Optional: install XFCE GUI
+echo
+echo "=================================================="
+echo "=== Step 8: Install XFCE GUI (optional) ==="
+echo "=================================================="
+echo
 read -rp "Install XFCE + LightDM? (y/N): " GUI
 if [[ "$GUI" =~ ^[Yy]$ ]]; then
     arch-chroot "$MOUNTPOINT" pacman -S --needed --noconfirm xorg-server xorg-xinit xfce4 xfce4-terminal lightdm lightdm-gtk-greeter
     arch-chroot "$MOUNTPOINT" systemctl enable lightdm.service
 fi
 
+echo
+echo "=================================================="
 echo "=== Arch Linux installation complete! Reboot to use your persistent system ==="
+echo "=================================================="
+echo
