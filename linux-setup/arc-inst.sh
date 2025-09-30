@@ -155,6 +155,21 @@ echo "=================================================="
 echo "=== Step 8: Chroot configuration (packages, user, GUI) ==="
 echo "=================================================="
 echo
+
+# Базовые пакеты для минимальной системы, чтобы chroot работал
+pacstrap "$MOUNTPOINT" base linux linux-firmware vim || {
+    echo "Error: pacstrap failed!"
+    exit 1
+}
+
+# Монтирование необходимых системных каталогов для chroot
+mount --mkdir --types proc /proc "$MOUNTPOINT/proc"
+mount --mkdir --rbind /sys "$MOUNTPOINT/sys"
+mount --mkdir --make-rslave "$MOUNTPOINT/sys"
+mount --mkdir --rbind /dev "$MOUNTPOINT/dev"
+mount --mkdir --make-rslave "$MOUNTPOINT/dev"
+mount --mkdir --bind /run "$MOUNTPOINT/run" || true
+
 arch-chroot "$MOUNTPOINT" bash <<'EOF'
 set -e
 
