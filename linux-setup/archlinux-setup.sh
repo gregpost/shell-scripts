@@ -1,35 +1,45 @@
 #!/usr/bin/env bash
-# Arch Linux safe installer with numbered disk selection and confirmation
+# Arch Linux safe installer with partition number selection and confirmation
 set -e
 
 MOUNTPOINT="/mnt"
 
 echo "=== Step 1: Show available disks ==="
-DISKS=($(lsblk -dpno NAME,SIZE | grep -E "/dev/sd|/dev/vd|/dev/nvme"))
+DISKS=($(lsblk -dno NAME,SIZE))   # получаем список: NAME SIZE NAME SIZE ...
+
+# Формируем нумерованный список
 i=1
-for d in "${DISKS[@]}"; do
-    echo "$i) $d"
+for ((j=0; j<${#DISKS[@]}; j+=2)); do
+    NAME="${DISKS[j]}"
+    SIZE="${DISKS[j+1]}"
+    echo "$i) /dev/$NAME  ($SIZE)"
     ((i++))
 done
 
-# Выбор диска по номеру
-read -rp "Enter the disk number to install (1-${#DISKS[@]}): " DISKNUM
-if ! [[ "$DISKNUM" =~ ^[0-9]+$ ]] || [ "$DISKNUM" -lt 1 ] || [ "$DISKNUM" -gt "${#DISKS[@]}" ]; then
-    echo "Error: Invalid selection"
+# Выбор по номеру
+read -rp "Enter the disk number to install: " DISKNUM
+INDEX=$(( (DISKNUM - 1) * 2 ))
+
+if [ $INDEX -lt 0 ] || [ $INDEX -ge ${#DISKS[@]} ]; then
+    echo "Error: invalid disk number"
     exit 1
 fi
 
-DISK=$(echo "${DISKS[$((DISKNUM-1))]}" | awk '{print $1}')
+DISK="/dev/${DISKS[$INDEX]}"
+
+# Показываем выбранный диск и информацию о нём
 echo "You selected disk: $DISK"
+lsblk "$DISK" -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL
 
 # Подтверждение
-read -rp "Are you sure you want to use $DISK ? All data on it may be lost! (yes/no): " CONFIRM
+read -rp "Are you sure you want to use this disk? All data on it may be lost! (yes/no): " CONFIRM
 if [[ "$CONFIRM" != "yes" ]]; then
     echo "Installation aborted by user."
     exit 0
 fi
 
 echo "=== Step 2: Partition & Format Disk ==="
+# Partitioning (GPT + EFI + root) if not exists
 if ! blkid "${DISK}2" >/dev/null 2>&1; then
     echo "Creating GPT and partitions..."
     parted --script "$DISK" mklabel gpt
@@ -106,8 +116,9 @@ if ! grep -q root /etc/shadow; then
     passwd
 fi
 
-# Network + utilities
+# Network + utilities (mc, nano)
 pacman -S --needed --noconfirm networkmanager iptables mc nano
+
 systemctl enable NetworkManager
 
 # Bootloader
@@ -117,7 +128,7 @@ if [ ! -d /boot/grub ]; then
     grub-mkconfig -o /boot/grub/grub.cfg
 fi
 
-# VirtualBox Guest Additions
+# VirtualBox detection and Guest Additions
 if systemd-detect-virt | grep -iq virtualbox; then
     echo "Detected VirtualBox, installing guest-utils..."
     pacman -S --needed --noconfirm virtualbox-guest-utils
@@ -125,7 +136,7 @@ if systemd-detect-virt | grep -iq virtualbox; then
 fi
 EOF
 
-# Optional: user creation
+# Optional: create user if not exists
 read -rp "Enter new username (leave empty to skip): " USERNAME
 if [ -n "$USERNAME" ]; then
     if ! arch-chroot "$MOUNTPOINT" id "$USERNAME" >/dev/null 2>&1; then
@@ -138,7 +149,7 @@ if [ -n "$USERNAME" ]; then
     fi
 fi
 
-# Optional: XFCE GUI
+# Optional: install XFCE GUI
 read -rp "Install XFCE + LightDM? (y/N): " GUI
 if [[ "$GUI" =~ ^[Yy]$ ]]; then
     arch-chroot "$MOUNTPOINT" pacman -S --needed --noconfirm xorg-server xorg-xinit xfce4 xfce4-terminal lightdm lightdm-gtk-greeter
