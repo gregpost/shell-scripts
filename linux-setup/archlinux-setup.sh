@@ -9,10 +9,19 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Логирование: дублируем весь вывод в файл
+##################################################
+#              LOG FILE SETUP                    #
+#  Очистка предыдущих логов и перенаправление    #
+##################################################
 LOGFILE="/shared/log.txt"
 mkdir -p "$(dirname "$LOGFILE")"
+
+# Очистка предыдущего лога перед запуском скрипта
+> "$LOGFILE"
+
+# Перенаправление всего вывода в лог и на экран
 exec > >(tee -a "$LOGFILE") 2>&1
+##################################################
 
 MOUNTPOINT="/mnt"
 
@@ -109,16 +118,19 @@ mount --mkdir "${DISK}1" "$MOUNTPOINT/boot"
 # Step 4 check: Ensure /mnt is empty
 if [ "$(ls -A "$MOUNTPOINT")" ]; then
     echo
-    echo "Warning: $MOUNTPOINT is not empty. Previous installation files may exist."
-    read -rp "Do you want to unmount everything and clear $MOUNTPOINT? (yes/no): " UNMOUNT_CONFIRM
+    echo "=================================================="
+    echo "WARNING: $MOUNTPOINT is not empty. Previous installation data may exist."
+    echo "=================================================="
+    read -rp "Do you want to unmount everything under $MOUNTPOINT and continue? (yes/no): " UNMOUNT_CONFIRM
     if [[ "$UNMOUNT_CONFIRM" == "yes" ]]; then
-        echo "Unmounting $MOUNTPOINT..."
+        echo "Unmounting all mounts under $MOUNTPOINT..."
+        # Рекурсивно размонтируем все, игнорируя ошибки
         umount -Rl "$MOUNTPOINT" || echo "Warning: Some mounts could not be unmounted."
-        echo "$MOUNTPOINT is now unmounted. You can retry the script."
-        exit 0
+        echo "$MOUNTPOINT is now unmounted and ready for installation."
+        mkdir -p "$MOUNTPOINT"
     else
         echo "Installation aborted by user due to non-empty $MOUNTPOINT."
-        exit 0
+        exit 1
     fi
 fi
 
