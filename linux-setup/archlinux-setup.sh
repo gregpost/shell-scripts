@@ -9,48 +9,21 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-echo
-echo "=================================================="
-echo "=== LOG FILE SETUP ==="
-echo "=================================================="
-echo
-
+# Логирование: дублируем весь вывод в файл
 LOGFILE="/shared/log.txt"
 mkdir -p "$(dirname "$LOGFILE")"
-
-# Очистка предыдущего лога перед запуском скрипта
-> "$LOGFILE"
-
-# Перенаправление всего вывода в лог и на экран
 exec > >(tee -a "$LOGFILE") 2>&1
-##################################################
-
-echo
-echo "=================================================="
-echo "=== CHECK IF /MNT IS EMPTY ==="
-echo "=================================================="
-echo
 
 MOUNTPOINT="/mnt"
 
-# Проверяем, есть ли что-то смонтированное или файлы в /mnt
-if mountpoint -q "$MOUNTPOINT" || [ "$(ls -A "$MOUNTPOINT" 2>/dev/null)" ]; then
+# Проверка, что MOUNTPOINT пустой
+if [ -n "$(ls -A $MOUNTPOINT 2>/dev/null)" ]; then
     echo
     echo "=================================================="
-    echo "WARNING: $MOUNTPOINT is not empty! Previous installation data may exist."
-    echo "You can clean or unmount this partition before proceeding."
+    echo "ERROR: $MOUNTPOINT is not empty! Previous installation data may exist."
+    echo "Please clean or unmount this partition before proceeding."
     echo "=================================================="
-    read -rp "Do you want to unmount and clean $MOUNTPOINT? (yes/no): " CLEANMNT
-    if [[ "$CLEANMNT" == "yes" ]]; then
-        echo "Unmounting all mounts under $MOUNTPOINT..."
-        umount -Rl "$MOUNTPOINT" || echo "Warning: Some mounts could not be unmounted."
-        rm -rf "${MOUNTPOINT:?}/"*
-        echo "$MOUNTPOINT is now clean and ready for installation."
-        mkdir -p "$MOUNTPOINT"
-    else
-        echo "Installation aborted. Please manually clean or unmount $MOUNTPOINT."
-        exit 1
-    fi
+    exit 1
 fi
 
 echo
@@ -133,13 +106,23 @@ echo
 mount --mkdir "${DISK}2" "$MOUNTPOINT"
 mount --mkdir "${DISK}1" "$MOUNTPOINT/boot"
 
-# создаём /etc если его нет
-mkdir -p "$MOUNTPOINT/etc"
-
-# Step 4: Generate fstab
+# Step 4: Install base system
 echo
 echo "=================================================="
-echo "=== Step 4: Generate fstab ==="
+echo "=== Step 4: Install base system if not installed ==="
+echo "=================================================="
+echo
+if [ ! -f "$MOUNTPOINT/etc/arch-release" ]; then
+    echo "Installing base system..."
+    pacstrap -K --noconfirm "$MOUNTPOINT" base linux linux-firmware mkinitcpio
+else
+    echo "Base system already installed, skipping pacstrap"
+fi
+
+# Step 5: Generate fstab
+echo
+echo "=================================================="
+echo "=== Step 5: Generate fstab ==="
 echo "=================================================="
 echo
 if [ ! -f "$MOUNTPOINT/etc/fstab" ] || ! grep -q "${DISK}2" "$MOUNTPOINT/etc/fstab"; then
@@ -149,10 +132,10 @@ else
     echo "fstab already exists, skipping"
 fi
 
-# Step 5: Chroot configuration
+# Step 6: Chroot configuration
 echo
 echo "=================================================="
-echo "=== Step 5: Chroot configuration (packages, user, GUI) ==="
+echo "=== Step 6: Chroot configuration (packages, user, GUI) ==="
 echo "=================================================="
 echo
 arch-chroot "$MOUNTPOINT" bash <<'EOF'
@@ -200,10 +183,10 @@ if systemd-detect-virt | grep -iq virtualbox; then
 fi
 EOF
 
-# Step 6: Optional create user
+# Optional: create user if not exists
 echo
 echo "=================================================="
-echo "=== Step 6: Create user ==="
+echo "=== Step 7: Create user ==="
 echo "=================================================="
 echo
 read -rp "Enter new username (leave empty to skip): " USERNAME
@@ -219,10 +202,10 @@ if [ -n "$USERNAME" ]; then
     fi
 fi
 
-# Step 7: Optional install XFCE GUI
+# Optional: install XFCE GUI
 echo
 echo "=================================================="
-echo "=== Step 7: Install XFCE GUI (optional) ==="
+echo "=== Step 8: Install XFCE GUI (optional) ==="
 echo "=================================================="
 echo
 read -rp "Install XFCE + LightDM? (y/N): " GUI
@@ -231,7 +214,6 @@ if [[ "$GUI" =~ ^[Yy]$ ]]; then
     arch-chroot "$MOUNTPOINT" systemctl enable lightdm.service
 fi
 
-# Step 8: Installation complete
 echo
 echo "=================================================="
 echo "=== Arch Linux installation complete! Reboot to use your persistent system ==="
