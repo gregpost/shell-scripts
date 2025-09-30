@@ -142,6 +142,7 @@ echo "=================================================="
 echo "=== Step 7: Generate fstab ==="
 echo "=================================================="
 echo
+mkdir -p "$MOUNTPOINT/etc"
 if [ ! -f "$MOUNTPOINT/etc/fstab" ] || ! grep -q "${DISK}2" "$MOUNTPOINT/etc/fstab"; then
     genfstab -U "$MOUNTPOINT" >> "$MOUNTPOINT/etc/fstab"
     echo "fstab generated"
