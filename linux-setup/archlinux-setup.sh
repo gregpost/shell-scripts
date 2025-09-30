@@ -133,6 +133,9 @@ echo
 mount --mkdir "${DISK}2" "$MOUNTPOINT"
 mount --mkdir "${DISK}1" "$MOUNTPOINT/boot"
 
+# создаём /etc если его нет
+mkdir -p "$MOUNTPOINT/etc"
+
 # Step 4: Generate fstab
 echo
 echo "=================================================="
