@@ -77,6 +77,6 @@
   "version": "3.0.11",
   "local_repo": {
     "enabled": true,
-    "path": "/mnt/usb/arch-local-repo"
+    "path": "/shar/arch-local-repo"
   }
 }
