@@ -21,6 +21,9 @@ if [[ -z "$CONFIG_PATH" ]]; then
   "bootloader": "Grub",
   "custom_commands": [
     {
+      "command": "timedatectl set-ntp false && systemctl stop systemd-timesyncd.service && systemctl disable systemd-timesyncd.service"
+    },
+    {
       "command": "echo 'xrandr --output Virtual-1 --mode 1920x1200' >> /home/user1/.xprofile && chown user1:user1 /home/user1/.xprofile"
     }
   ],
