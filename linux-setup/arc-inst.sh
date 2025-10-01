@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 # Arch Linux auto-install launcher
 # Run as root
 
@@ -20,9 +20,6 @@ if [[ -z "$CONFIG_PATH" ]]; then
   "auth_config": {},
   "bootloader": "Grub",
   "custom_commands": [
-    {
-      "command": "timedatectl set-ntp false && systemctl stop systemd-timesyncd.service && systemctl disable systemd-timesyncd.service"
-    },
     {
       "command": "echo 'xrandr --output Virtual-1 --mode 1920x1200' >> /home/user1/.xprofile && chown user1:user1 /home/user1/.xprofile"
     }
@@ -81,7 +78,8 @@ if [[ -z "$CONFIG_PATH" ]]; then
         "url": "file:///tmp/pacman-repo",
         "sign_check": "Optional",
         "sign_option": "TrustAll"
-      }
+      },
+      "use_mirrorlist": false
     ]
   },
   "network_config": { "type": "iso" },
@@ -109,4 +107,5 @@ EOF
 fi
 
 echo "Starting Arch Linux installation using archinstall..."
-archinstall --config "$CONFIG_PATH"
+archinstall --config "$CONFIG_PATH" --skip-ntp --offline --no-pkg-lookups --skip-wkd --skip-version-check
+
