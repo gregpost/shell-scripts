@@ -82,7 +82,7 @@ if [[ -z "$CONFIG_PATH" ]]; then
     ]
   },
   "network_config": { "type": "iso" },
-  "ntp": true,
+  "ntp": false,
   "packages": [
     "base",
     "linux-firmware",
