@@ -41,8 +41,8 @@ if [[ -z "$CONFIG_PATH" ]]; then
             "mount_options": [],
             "mountpoint": "/boot",
             "obj_id": "19a2b092-48d0-459b-8546-d623943f2160",
-            "size": {"sector_size": {"unit": "B","value": 512},"unit": "GiB","value": 1},
-            "start": {"sector_size": {"unit": "B","value": 512},"unit": "MiB","value": 1},
+            "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "GiB", "value": 1 },
+            "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "MiB", "value": 1 },
             "status": "create",
             "type": "primary"
           },
@@ -54,8 +54,8 @@ if [[ -z "$CONFIG_PATH" ]]; then
             "mount_options": [],
             "mountpoint": "/",
             "obj_id": "02a162a1-bb66-4ed4-bd0f-ede1ec9af775",
-            "size": {"sector_size": {"unit": "B","value": 512},"unit": "B","value": 52612300800},
-            "start": {"sector_size": {"unit": "B","value": 512},"unit": "B","value": 1074790400},
+            "size": { "sector_size": { "unit": "B", "value": 512 }, "unit": "B", "value": 52612300800 },
+            "start": { "sector_size": { "unit": "B", "value": 512 }, "unit": "B", "value": 1074790400 },
             "status": "create",
             "type": "primary"
           }
@@ -71,7 +71,17 @@ if [[ -z "$CONFIG_PATH" ]]; then
     "sys_enc": "UTF-8",
     "sys_lang": "en_US.UTF-8"
   },
-  "network_config": {"type": "iso"},
+  "mirror_config": {
+    "custom_repositories": [
+      {
+        "name": "localrepo",
+        "url": "file:///tmp/pacman-repo",
+        "sign_check": "Optional",
+        "sign_option": "TrustAll"
+      }
+    ]
+  },
+  "network_config": { "type": "iso" },
   "ntp": true,
   "packages": [
     "base",
@@ -96,4 +106,4 @@ EOF
 fi
 
 echo "Starting Arch Linux installation using archinstall..."
-archinstall guided --config "$CONFIG_PATH"
+archinstall --config "$CONFIG_PATH"

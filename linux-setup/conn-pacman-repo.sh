@@ -1,6 +1,7 @@
 #!/bin/bash
 # Скрипт для подключения локального pacman-репозитория
 # Работает с папкой пакетов или с tar.gz архивом
+# Автоматически добавляет репозиторий в /etc/pacman.conf
 # По умолчанию использует RAM для временной папки
 
 set -e
@@ -34,7 +35,7 @@ case "$tmp_choice" in
         ;;
 esac
 
-# Очищаем RAM-папку перед использованием
+# Очищаем временную папку
 mkdir -p "$TMP_DIR"
 rm -rf "$TMP_DIR"/*
 mkdir -p "$TMP_DIR"
@@ -76,12 +77,23 @@ repo_name="localrepo"
 cd "$TMP_DIR"
 repo-add "$repo_name.db.tar.gz" *.pkg.tar.zst
 
-# Информация о ручном обновлении pacman.conf
+# Автоматическая модификация pacman.conf
+conf_line="[${repo_name}]"
+server_line="Server = file://$TMP_DIR"
+
+echo "Обновляем /etc/pacman.conf (резервная копия: /etc/pacman.conf.bak)..."
+sudo cp /etc/pacman.conf /etc/pacman.conf.bak
+
+# Удаляем все старые вхождения localrepo
+sudo sed -i "/^\[${repo_name}\]/,/^$/d" /etc/pacman.conf
+
+# Вставляем новый блок в начало файла
+sudo sed -i "1i ${conf_line}\nSigLevel = Optional TrustAll\n${server_line}\n" /etc/pacman.conf
+
+# Обновление баз пакетов
+sudo pacman -Sy
+
 echo
 echo "Готово! Репозиторий создан в $TMP_DIR"
-echo "Чтобы использовать его, добавьте в /etc/pacman.conf вручную:"
-echo "[${repo_name}]"
-echo "SigLevel = Optional TrustAll"
-echo "Server = file://$TMP_DIR"
-echo "Открою /etc/pacman.conf для редактирования..."
-sudo nano +9999 /etc/pacman.conf
+echo "Теперь можно ставить пакеты из $repo_name:"
+echo "  sudo pacman -S <имя_пакета>"
