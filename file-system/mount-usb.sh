@@ -1,5 +1,6 @@
 #!/bin/bash
-# Script to mount USB flash and read local scripts
+# File: mount-usb.sh
+# Script to mount USB flash
 
 set -e
 
@@ -50,20 +51,23 @@ if [ ! -b "$data_part" ]; then
     exit 1
 fi
 
-# Mount partition
-mount_point="/mnt/usbdata"
+# Ask user for mount point
+read -rp "Enter mount point path (or press Enter for default /mnt/usbdata): " custom_mount_point
+mount_point="${custom_mount_point:-/mnt/usbdata}"
+
+# Create and mount partition
 sudo mkdir -p "$mount_point"
-sudo mount "$data_part" "$mount_point"
 
-echo "Partition mounted at $mount_point"
-
-# Check if folder exists
-script_folder="$mount_point/shell-scripts/linux-setup"
-if [ -d "$script_folder" ]; then
-    echo "Your scripts are here:"
-    ls "$script_folder"
-else
-    echo "Folder shell-scripts/linux-setup not found on this partition."
+# Check if mount point is already in use
+if mountpoint -q "$mount_point"; then
+    echo "Mount point $mount_point is already in use. Attempting to unmount..."
+    sudo umount "$mount_point"
 fi
 
-echo "Done. You can now access your scripts at $script_folder"
+sudo mount "$data_part" "$mount_point"
+
+echo "Partition $data_part mounted at $mount_point"
+
+# Show mounted contents
+echo "Available contents:"
+ls -la "$mount_point"
