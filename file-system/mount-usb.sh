@@ -66,8 +66,19 @@ fi
 
 sudo mount "$data_part" "$mount_point"
 
-echo "Partition $data_part mounted at $mount_point"
+# Verify the partition mounted successfully
+echo "Verifying mount..."
+if mountpoint -q "$mount_point"; then
+    echo "✅ SUCCESS: Partition $data_part mounted successfully at $mount_point"
 
-# Show mounted contents
-echo "Available contents:"
-ls -la "$mount_point"
+    # Show mount information
+    echo "📊 Mount information:"
+    df -h "$mount_point" | tail -1
+else
+    echo "❌ ERROR: Failed to mount partition $data_part at $mount_point"
+    echo "Please check:"
+    echo "1. The partition might be corrupted"
+    echo "2. File system type might not be supported"
+    echo "3. Check dmesg for errors: sudo dmesg | tail -20"
+    exit 1
+fi
