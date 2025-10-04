@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# Determine the directory where the AppImage is mounted
+HERE="$(dirname "$(readlink -f "$0")")"
+
+# Set the library path to include the AppImage's lib directory
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+export QT_PLUGIN_PATH="${HERE}/usr/lib/plugins"
+export QT_DEBUG_PLUGINS=1
+
+# Execute the main application
+exec "${HERE}/usr/bin/app_name" "$@"

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=app_name
+Exec=app_name
+Icon=icon_name
+Type=Application
+Terminal=false
+Categories=Utility
