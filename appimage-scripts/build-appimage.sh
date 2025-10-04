@@ -52,7 +52,7 @@ fi
 # --- Build AppImage ---
 OUTPUT_NAME="$(basename "$APPDIR" .AppDir)-x86_64.AppImage"
 echo "🚧 Building $OUTPUT_NAME ..."
-ARCH=x86_64 sudo $APPIMAGE_TOOL "$APPDIR" "$OUTPUT_NAME"
+ARCH=x86_64 $APPIMAGE_TOOL "$APPDIR" "$OUTPUT_NAME"
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed. Check AppDir contents and dependencies."
@@ -61,12 +61,4 @@ fi
 
 chmod a+x "$OUTPUT_NAME"
 echo "✅ AppImage built successfully: $OUTPUT_NAME"
-
-# --- Ask to run the built AppImage ---
-read -p "Do you want to launch $OUTPUT_NAME now? (y/n): " LAUNCH
-if [ "$LAUNCH" == "y" ]; then
-    echo "🚀 Launching AppImage..."
-    ./"$OUTPUT_NAME"
-else
-    echo "✅ Done. You can run ./$OUTPUT_NAME later."
-fi
+echo "📌 You can run it with: ./$OUTPUT_NAME"

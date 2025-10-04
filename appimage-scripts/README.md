@@ -56,7 +56,7 @@ chmod +x build-appimage.sh
 
 ---
 
-## 🧩 Copy ELF and Libraries Script
+## 🧩 Copy ELF Libraries Script
 
 The script `copy-app-libs.sh` helps you prepare `usr/lib` by copying
 all non-system libraries your application requires.
@@ -64,7 +64,8 @@ all non-system libraries your application requires.
 It will:
 1. Ask for the path to your executable.
 2. Ask if your application uses Qt.
-3. Optionally try to launch the executable to detect missing libraries from ELF error logs.
+3. Optionally try to launch the executable to detect missing libraries 
+from ELF error logs.
 4. Ask for directories to search for missing libraries if detected.
 5. Filter out system libraries automatically.
 6. Copy all required libraries directly into `usr/lib`.
