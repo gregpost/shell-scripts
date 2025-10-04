@@ -1,18 +1,23 @@
 #!/bin/bash
 set -e
 
-echo "=== AppImage Builder Script ==="
+echo "=== 🧱 AppImage Builder Script ==="
 
-# --- Ask user for AppImage folder ---
-read -p "Enter path to AppImage folder (e.g. ./app_name.AppDir): " APPDIR
+# --- Default AppDir path ---
+DEFAULT_APPDIR="./app_name.AppDir"
+read -p "Enter path to AppImage folder [default: $DEFAULT_APPDIR]: " APPDIR
+APPDIR=${APPDIR:-$DEFAULT_APPDIR}
 
 if [ ! -d "$APPDIR" ]; then
     echo "❌ Error: Directory '$APPDIR' does not exist."
     exit 1
 fi
 
+echo "Using AppImage directory: $APPDIR"
+echo
+
 # --- Check required structure ---
-echo "Checking AppDir structure..."
+echo "🔍 Checking AppDir structure..."
 
 MISSING=0
 if [ ! -f "$APPDIR/AppRun" ]; then
@@ -27,6 +32,7 @@ if [ ! -f "$APPDIR/icon_name.png" ]; then
     echo "❌ Missing icon file (icon_name.png) in $APPDIR"
     MISSING=1
 fi
+
 if [ $MISSING -eq 1 ]; then
     echo "⚠️  Please fix the missing files before building AppImage."
     exit 1
