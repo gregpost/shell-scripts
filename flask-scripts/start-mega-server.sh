@@ -13,6 +13,8 @@ APP_PORT=3000
 BRIDGE_PORT=4000
 TOKEN_FILE="$APP_DIR/token.txt"
 TUNNEL_LOG="/tmp/localhost_run.log"
+APP_LOG="/tmp/termrelay_app.log"
+BRIDGE_LOG="/tmp/chatgpt_bridge.log"
 REQ_FILE="$APP_DIR/requirements.txt"
 
 USE_NGROK=false
@@ -126,7 +128,8 @@ EOF
 
 # -------------------- запускаем Flask API --------------------
 if ! lsof -i :$APP_PORT -sTCP:LISTEN &>/dev/null; then
-    nohup python3 "$APP_FILE" >/tmp/termrelay_app.log 2>&1 &
+    : > "$APP_LOG"
+    nohup python3 "$APP_FILE" >>"$APP_LOG" 2>&1 &
     sleep 2
 fi
 
@@ -136,7 +139,8 @@ if ! lsof -i :$BRIDGE_PORT -sTCP:LISTEN &>/dev/null; then
         echo "Ошибка: chatgpt_bridge.py не найден в $APP_DIR/ai"
         exit 1
     fi
-    nohup python3 "$APP_DIR/ai/chatgpt_bridge.py" >/tmp/chatgpt_bridge.log 2>&1 &
+    : > "$BRIDGE_LOG"
+    nohup python3 "$APP_DIR/ai/chatgpt_bridge.py" >>"$BRIDGE_LOG" 2>&1 &
     sleep 3
 fi
 
@@ -151,13 +155,13 @@ if [ "$USE_NGROK" = true ]; then
         echo "  sudo snap install ngrok"
         exit 1
     fi
-    nohup ngrok http $APP_PORT >"$TUNNEL_LOG" 2>&1 &
+    nohup ngrok http $APP_PORT >>"$TUNNEL_LOG" 2>&1 &
     sleep 5
     TUNNEL_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | grep -oE 'https://[a-z0-9.-]+\.ngrok-free\.app' | head -n1)
 else
     nohup ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
           -o ServerAliveInterval=60 -R 80:localhost:$APP_PORT nokey@localhost.run \
-          >"$TUNNEL_LOG" 2>&1 &
+          >>"$TUNNEL_LOG" 2>&1 &
     sleep 3
     TUNNEL_URL=$(grep -oE 'https://[a-z0-9.-]+\.lhr\.life' "$TUNNEL_LOG" | tail -n1)
 fi
@@ -170,3 +174,19 @@ fi
 
 echo "Публичный URL туннеля: $TUNNEL_URL"
 echo "Токен доступа: $TOKEN"
+
+# -------------------- вывод логов --------------------
+echo
+echo "===== termrelay_app.log ====="
+tail -n 20 "$APP_LOG" || true
+echo
+echo "===== chatgpt_bridge.log ====="
+tail -n 20 "$BRIDGE_LOG" || true
+echo
+echo "===== localhost_run.log ====="
+tail -n 20 "$TUNNEL_LOG" || true
+
+# Фоновый просмотр логов
+echo
+echo "Для завершения нажмите Ctrl+C"
+tail -f "$APP_LOG" "$BRIDGE_LOG" "$TUNNEL_LOG"
