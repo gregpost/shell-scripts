@@ -123,11 +123,11 @@ fi
 
 # -------------------- запускаем bridge --------------------
 if ! lsof -i :$BRIDGE_PORT -sTCP:LISTEN &>/dev/null; then
-    if [ ! -f "$APP_DIR/chatgpt_bridge.py" ]; then
-        echo "Ошибка: chatgpt_bridge.py не найден в $APP_DIR"
+    if [ ! -f "$APP_DIR/ai/chatgpt_bridge.py" ]; then
+        echo "Ошибка: chatgpt_bridge.py не найден в $APP_DIR/ai"
         exit 1
     fi
-    nohup python3 "$APP_DIR/chatgpt_bridge.py" >/tmp/chatgpt_bridge.log 2>&1 &
+    nohup python3 "$APP_DIR/ai/chatgpt_bridge.py" >/tmp/chatgpt_bridge.log 2>&1 &
     sleep 3
 fi
 
