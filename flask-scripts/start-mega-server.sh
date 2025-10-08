@@ -13,6 +13,7 @@ APP_PORT=3000
 BRIDGE_PORT=4000
 TOKEN_FILE="$APP_DIR/token.txt"
 TUNNEL_LOG="/tmp/localhost_run.log"
+REQ_FILE="$APP_DIR/requirements.txt"
 
 USE_NGROK=false
 
@@ -53,6 +54,14 @@ if [ ! -d "$APP_DIR" ]; then
     mkdir -p "$APP_DIR"
 fi
 cd "$APP_DIR"
+
+# -------------------- установка зависимостей --------------------
+if [ -f "$REQ_FILE" ]; then
+    echo "Устанавливаются зависимости из $REQ_FILE..."
+    pip install -r "$REQ_FILE"
+else
+    echo "Файл $REQ_FILE не найден, пропускаем установку зависимостей."
+fi
 
 # -------------------- проверка Flask --------------------
 if ! python3 -c "import flask" &>/dev/null; then
