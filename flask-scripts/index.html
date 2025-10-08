@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>TermRelay — Web UI</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;max-width:900px;margin:24px auto;padding:12px}
+    textarea, input[type=text]{width:100%;box-sizing:border-box;padding:8px;margin:6px 0}
+    button{padding:8px 12px;margin-right:8px}
+    pre{background:#0b0b0b;color:#e6e6e6;padding:12px;border-radius:6px;overflow:auto;white-space:pre-wrap;}
+    label.inline{display:inline-block;margin-right:12px;font-weight:normal;}
+  </style>
+</head>
+<body>
+  <h1>TermRelay — Web UI</h1>
+
+  <label>Token:</label>
+  <input id="token" type="text" placeholder="вставь токен сюда" />
+
+  <label>Команда для выполнения:</label>
+  <textarea id="cmd" rows="4" placeholder='например: whoami && uname -a'></textarea>
+
+  <div style="margin:8px 0">
+    <label class="inline"><input type="checkbox" id="jsonMode" /> Показать полный JSON</label>
+    <button id="send">Отправить команду</button>
+    <button id="clear">Очистить вывод</button>
+  </div>
+
+  <h3>Вывод</h3>
+  <pre id="out">Нажми «Отправить команду»</pre>
+
+  <script>
+    const sendBtn = document.getElementById('send');
+    const out = document.getElementById('out');
+    const jsonModeCheckbox = document.getElementById('jsonMode');
+    const cmdInput = document.getElementById('cmd');
+
+    async function doPost(url, token, cmd) {
+      try {
+        const resp = await fetch(url + '/run', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ cmd })
+        });
+        const txt = await resp.text();
+        try {
+          const j = JSON.parse(txt);
+          if (jsonModeCheckbox.checked) {
+            out.textContent = JSON.stringify(j, null, 2);
+          } else {
+            out.textContent = j.output ?? '';
+          }
+        } catch (e) {
+          out.textContent = txt;
+        }
+      } catch (err) {
+        out.textContent = 'Ошибка запроса: ' + err;
+      }
+    }
+
+    function sendRequest() {
+      const token = (document.getElementById('token').value || '').trim();
+      const cmd = (document.getElementById('cmd').value || '').trim();
+      if (!token) { alert('Вставь токен'); return; }
+      if (!cmd) { alert('Введи команду'); return; }
+      out.textContent = 'Отправка...';
+      doPost(window.location.origin, token, cmd);
+    }
+
+    sendBtn.addEventListener('click', sendRequest);
+
+    document.getElementById('clear').addEventListener('click', () => { out.textContent = ''; });
+
+    cmdInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendRequest();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-APP_DIR="/data/flask/tmp"
+APP_DIR="/data/scripts/flask-scripts"
 APP_PORT=3000
 BRIDGE_PORT=4000
 TOKEN_FILE="$APP_DIR/token.txt"
