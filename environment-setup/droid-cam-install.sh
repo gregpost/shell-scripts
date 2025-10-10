@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# File: install-droidcam-linux.sh
+# File: droidcam-linux-install.sh
 # Purpose: Автоматически установить и настроить DroidCam под Linux.
 # DroidCam предназначен для использования android-телефона как веб-камеры
 # Поддерживает установку клиента, загрузку драйвера v4l2loopback и запуск камеры.
