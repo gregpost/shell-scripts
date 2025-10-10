@@ -25,8 +25,9 @@ if ! dpkg -l | grep -q v4l2loopback-dkms; then
   sudo apt install -y v4l2loopback-dkms
 fi
 
-# Спросить папку установки
-read -rp "Введите путь для установки DroidCam (например, /opt/droidcam): " INSTALL_DIR
+# Спросить папку установки с дефолтным значением
+read -rp "Введите путь для установки DroidCam [по умолчанию: $HOME/droidcam]: " INSTALL_DIR
+INSTALL_DIR="${INSTALL_DIR:-$HOME/droidcam}"
 INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
 
 mkdir -p "$INSTALL_DIR"
@@ -38,7 +39,15 @@ wget -O droidcam_latest.zip https://files.dev47apps.net/linux/droidcam_latest.zi
 
 # Распаковка архива
 unzip -o droidcam_latest.zip
-cd droidcam*
+
+# Переход в каталог с клиентом (точное определение имени)
+CLIENT_DIR=$(find "$INSTALL_DIR" -maxdepth 1 -type d -name "droidcam*" ! -name "v4l2loopback" | head -n 1)
+if [ -z "$CLIENT_DIR" ]; then
+  echo "❌ Не удалось найти распакованный каталог DroidCam."
+  exit 1
+fi
+
+cd "$CLIENT_DIR"
 
 # Установка клиента
 echo "Устанавливается клиент DroidCam..."
