@@ -1,63 +1,64 @@
 #!/bin/bash
 
-set -e
-clear
+# Функция для запроса пути с значением по умолчанию
+ask_path() {
+    local prompt="$1"
+    local default="$2"
+    
+    read -p "$prompt [$default]: " user_input
+    if [ -z "$user_input" ]; then
+        echo "$default"
+    else
+        echo "$user_input"
+    fi
+}
 
-# Colors
-GREEN='\033[0;32m'
-NC='\033[0m'
+# Запрашиваем пути
+TAR_GZ_PATH=$(ask_path "Введите путь к tar.gz архиву" "./local.db.tar.gz")
+MOUNT_POINT=$(ask_path "Введите точку монтирования HDD" "/mnt")
 
-# Request of archive path
-DEFAULT_ARCHIVE_DIR='/mnt/usb/data/pacman-repo.tar.gz'
-echo -en "${GREEN}Input path to pacman package archive [${DEFAULT_ARCHIVE_DIR}]: ${NC}"
-read -r ARCHIVE_DIR
-ARCHIVE_DIR=${ARCHIVE_DIR:-${DEFAULT_ARCHIVE_DIR}}
+# Создаем случайное имя для временной папки
+TEMP_DIR="$MOUNT_POINT/tmp/$(date +%s%N | md5sum | head -c 8)"
+echo "Создаем временную директорию: $TEMP_DIR"
 
-# Request path to anarchive .zst files
-DEFAULT_ROOT_DIR='/mnt/root'
-echo -en "${GREEN}Input path to HDD mount point [${DEFAULT_ROOT_DIR}]: ${NC}"
-read -r ROOT_DIR
-ROOT_DIR=${ROOT_DIR:-${DEFAULT_ROOT_DIR}}
+# Создаем временную директорию
+mkdir -p "$TEMP_DIR"
 
-# Create temp dir /tmp/tmp.abcdef123456
-TEMP_DIR="${ROOT_DIR}$(mktemp -d)"
-mkdir -p "${TEMP_DIR}"
-echo -e "${GREEN}Archive unpacking to temp folder: ${TEMP_DIR}${NC}"
-pv "$ARCHIVE_DIR" | tar -xzf - -C "$TEMP_DIR"
+# Разархивируем tar.gz
+echo "Распаковываем архив..."
+tar -xzf "$TAR_GZ_PATH" -C "$TEMP_DIR"
 
-# Check existance of local.db.tar.gz and package files
-if [[ ! -f "$TEMP_DIR/local.db.tar.gz" ]];
-then
-    echo -e "${RED}Error: local.db.tar.gz not found in archive!${NC}"
-    rm -rf "$TEMP_DIR"
-    exit 1
+# Находим все .zst архивы внутри и распаковываем их
+echo "Распаковываем внутренние архивы..."
+find "$TEMP_DIR" -name "*.zst" -type f -exec tar -xf {} -C "$TEMP_DIR" \;
+
+# Создаем локальный репозиторий в точке монтирования
+REPO_DIR="$MOUNT_POINT/local-repo"
+mkdir -p "$REPO_DIR"
+
+# Копируем все пакеты в репозиторий
+echo "Копируем пакеты в репозиторий..."
+find "$TEMP_DIR" -name "*.pkg.tar.zst" -type f -exec cp {} "$REPO_DIR" \;
+
+# Создаем базу данных репозитория
+echo "Создаем базу данных репозитория..."
+cd "$REPO_DIR"
+repo-add local-repo.db.tar.gz *.pkg.tar.zst
+
+# Добавляем репозиторий в pacman.conf системы на HDD
+echo "Добавляем репозиторий в систему..."
+PACMAN_CONF="$MOUNT_POINT/etc/pacman.conf"
+if [ -f "$PACMAN_CONF" ]; then
+    echo -e "\n[local-repo]\nSigLevel = Optional TrustAll\nServer = file://$REPO_DIR" >> "$PACMAN_CONF"
 fi
 
-echo -e "${GREEN}Archive unpacked successfully!${NC}" 
-echo -e "${GREEN}Unpacked folder size: $(du -sh ${TEMP_DIR})${NC}"
+# Устанавливаем пакеты на систему в точке монтирования
+echo "Устанавливаем пакеты..."
+arch-chroot "$MOUNT_POINT" pacman -Sy --noconfirm
+arch-chroot "$MOUNT_POINT" pacman -S --noconfirm $(pacman --root "$MOUNT_POINT" --sysroot "$MOUNT_POINT" -Sl local-repo 2>/dev/null | awk '{print $2}')
 
-# Copy pacman database
-mkdir -p "$ROOT_DIR/var/lib/pacman/local" "$ROOT_DIR/var/cache/pacman/pkg"
-cp "$TEMP_DIR/local.db.tar.gz" "$ROOT_DIR/var/lib/pacman/local/"
-
-# Create pacman.conf
-mkdir -p "${ROOT_DIR}/etc"
-cat > "$ROOT_DIR/etc/pacman.conf" << EOF
-[options]
-Architecture = auto
-SigLevel = Never
-EOF
-
-# Install packages
-echo -e "${GREEN}Installing packages...${NC}"
-for pkg in "$TEMP_DIR"/*.pkg.tar.zst; do
-    if [[ -f "$pkg" ]]; then
-        echo "  $(basename "$pkg")"
-        bsdtar -xpf "$pkg" -C "$ROOT_DIR"
-    fi
-done
-
-# Cleaning
+# Очищаем временную директорию
+echo "Очищаем временную директорию..."
 rm -rf "$TEMP_DIR"
 
-echo -e "\n${GREEN} Installation complete!${NC}"
+echo "Готово!"
