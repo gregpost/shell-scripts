@@ -43,7 +43,7 @@
 # 
 # НАСТРОЙКА ДЕЙСТВИЯ:
 # Программа: powershell.exe
-# Аргументы: -WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\Users\root\Desktop\shell-scripts\file-system\backup.ps1" -Source "path/to/repo" -Destination "path/to/output/folder"
+# Аргументы: -WindowStyle Hidden -ExecutionPolicy Bypass -File "path/to/backup.ps1" -Source "path/to/repo" -Destination "path/to/output/folder"
 
 param(
     [Parameter(Mandatory=$true, Position=0)]
