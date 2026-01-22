@@ -1,35 +1,35 @@
 ﻿<#
 .SYNOPSIS
-    backup.ps1 - Folder archiving with multiple destination support
+    backup.ps1 - Folder archiving with full configuration file support
 
 .DESCRIPTION
-    Creates a ZIP archive of the specified folder with multiple destination paths.
+    Creates a ZIP archive with all parameters configurable via configuration file.
     Archive name contains day of week index (0=Sunday,6=Saturday), creation hour,
     and half-hour indicator. Files larger than specified size limit are excluded.
 
+.PARAMETER ConfigPath
+    Path to configuration file containing all backup parameters
+
 .PARAMETER Source
-    Source folder path to archive
+    Source folder path to archive (alternative to config file)
 
 .PARAMETER Destination
     Destination directory path for the archive (legacy parameter)
-
-.PARAMETER ConfigPath
-    Path to configuration file containing destination paths (one per line)
 
 .PARAMETER MaxFileSizeMB
     Maximum file size to include in archive (in megabytes). Default: 2 MB
 
 .NOTES
-    Version: 1.4
+    Version: 1.5
     Author: Grigory Postolsky + DeepSeek
-    For Task Scheduler: powershell.exe -ExecutionPolicy Bypass -File backup.ps1 -Source "C:\source" -ConfigPath "C:\config\destinations.txt"
+    For Task Scheduler: powershell.exe -ExecutionPolicy Bypass -File backup.ps1 -ConfigPath "C:\config\backup.cfg"
 
 .EXAMPLE
-    .\backup.ps1 -Source "C:\source" -ConfigPath "C:\config\destinations.txt" -MaxFileSizeMB 5
+    .\backup.ps1 -ConfigPath "C:\config\backup.cfg"
 
 .EXAMPLE
-    # Legacy mode with single destination
-    .\backup.ps1 -Source "C:\source" -Destination "D:\backups"
+    # Legacy command line mode
+    .\backup.ps1 -Source "C:\source" -Destination "D:\backups" -MaxFileSizeMB 5
 #>
 
 # ==============================================
@@ -45,48 +45,91 @@
 # 
 # НАСТРОЙКА ДЕЙСТВИЯ:
 # Программа: powershell.exe
-# Аргументы: -WindowStyle Hidden -ExecutionPolicy Bypass -File "path/to/backup.ps1" -Source "path/to/repo" -ConfigPath "path/to/destinations.txt"
+# Аргументы: -WindowStyle Hidden -ExecutionPolicy Bypass -File "path/to/backup.ps1" -ConfigPath "path/to/backup.cfg"
 
 param(
-    [Parameter(Mandatory=$true, Position=0)]
-    [string]$Source,
-    
-    [Parameter(Mandatory=$false, Position=1)]
-    [string]$Destination,
-    
     [Parameter(Mandatory=$false)]
     [string]$ConfigPath,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$Source,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$Destination,
     
     [Parameter(Mandatory=$false)]
     [int]$MaxFileSizeMB = 2
 )
 
-# ===================== CONFIGURATION =====================
-$source = $Source
-
-# Maximum file size to include in archive (in megabytes)
-$maxFileSizeMB = $MaxFileSizeMB
-# =========================================================
-
-# Read destination paths
+# Default values
+$source = ""
 $destinations = @()
+$maxFileSizeMB = $MaxFileSizeMB
 
+# Read configuration from file if specified
 if ($ConfigPath) {
-    # Read from configuration file
     if (-not (Test-Path $ConfigPath)) {
         Write-Host "Error: Configuration file not found: $ConfigPath" -ForegroundColor Red
         exit 1
     }
     
-    $destinations = Get-Content $ConfigPath | Where-Object { $_ -match '\S' }
+    $configContent = Get-Content $ConfigPath
+    foreach ($line in $configContent) {
+        $trimmedLine = $line.Trim()
+        if ($trimmedLine -match '^([^=]+)=(.*)$') {
+            $key = $matches[1].Trim()
+            $value = $matches[2].Trim()
+            
+            switch ($key) {
+                "Source" {
+                    $source = $value
+                }
+                "Destination" {
+                    if ($value -match '[\*\?\[\]]') {
+                        # Pattern matching for multiple destinations
+                        $destinations += $value
+                    }
+                    else {
+                        # Single destination
+                        $destinations += $value
+                    }
+                }
+                "MaxFileSizeMB" {
+                    if ([int]::TryParse($value, [ref]$maxFileSizeMB)) {
+                        # Value already parsed
+                    }
+                    else {
+                        Write-Host "Warning: Invalid MaxFileSizeMB value in config, using default: $maxFileSizeMB" -ForegroundColor Yellow
+                    }
+                }
+            }
+        }
+        elseif ($trimmedLine -match '\S' -and $trimmedLine -notmatch '^#') {
+            # Treat non-empty lines without = as additional destinations
+            $destinations += $trimmedLine
+        }
+    }
 }
-elseif ($Destination) {
-    # Legacy mode: use single destination parameter
-    $destinations = @($Destination)
+
+# Fallback to command line parameters if not set in config
+if ([string]::IsNullOrEmpty($source)) {
+    if (-not [string]::IsNullOrEmpty($Source)) {
+        $source = $Source
+    }
+    else {
+        Write-Host "Error: Source path must be specified (either in config file or via -Source parameter)" -ForegroundColor Red
+        exit 1
+    }
 }
-else {
-    Write-Host "Error: Either -ConfigPath or -Destination must be specified" -ForegroundColor Red
-    exit 1
+
+if ($destinations.Count -eq 0) {
+    if (-not [string]::IsNullOrEmpty($Destination)) {
+        $destinations = @($Destination)
+    }
+    else {
+        Write-Host "Error: Destination path(s) must be specified (either in config file or via -Destination parameter)" -ForegroundColor Red
+        exit 1
+    }
 }
 
 if ($destinations.Count -eq 0) {
