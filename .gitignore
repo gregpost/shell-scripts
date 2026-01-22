@@ -1,3 +1,4 @@
 .idea
 *.tar
 token.txt
+*.conf
